@@ -22,8 +22,6 @@ bimfabrikhh = {path = "C:/_Lokale_Daten_ungesichert/__GitHubProjects/BIMFabrikHH
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
 uvicorn = "^0.34.0"
-fastprocess = "^2.1.0"
-fastprocesses = "^0.8.4"
 
 [build-system]
 requires = ["poetry-core"]
