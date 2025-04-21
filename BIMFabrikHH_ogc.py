@@ -29,7 +29,7 @@ app.include_router(router_ogc_status)
 app.include_router(router_ogc_result)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(BASE_DIR, "src", "output")
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 print(OUTPUT_DIR)
 
 app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
@@ -38,4 +38,5 @@ app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8004)
+    # uvicorn.run(app, host="127.0.0.1", port=8004, reload=True)
+    uvicorn.run("BIMFabrikHH_ogc:app", host="127.0.0.1", port=8004, reload=True)

@@ -50,37 +50,38 @@ def get_oaf_dgm(
         raise HTTPException(status_code=500, detail=f"Error fetching tree data: {str(e)}")
 
 
-@router_dgm_modell.post(
-    "/generate-dgm-model",
-    response_class=Response,
-    description="Generate an IFC model of Dgm within the specified bounding box",
-)
-async def generate_dgm_model(
-    gml_files: List = Query(),
-    params: ModelParams = ModelParams(
-        bbox=BoundingBoxParams(
-            min_x=9.9847,
-            min_y=53.5519,
-            max_x=9.9856,
-            max_y=53.5522,
-        ),
-        level_of_geom=1,
-        project_name="Test",
-    ),
-):
-    try:
-        ifc_bytes = process_gml_to_ifc(
-            gml_files,
-            "Hamburg Buildings",
-            "Hamburg Site",
-            reset_model=True,
-        )
-
-        return Response(
-            content=ifc_bytes,
-            media_type="application/x-step",
-            headers={"Content-Disposition": f"attachment; filename=trees_{params.project_name}.ifc"},
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating tree model: {str(e)}")
+#
+# @router_dgm_modell.post(
+#     "/generate-dgm-model",
+#     response_class=Response,
+#     description="Generate an IFC model of Dgm within the specified bounding box",
+# )
+# async def generate_dgm_model(
+#     gml_files: List = Query(),
+#     params: ModelParams = ModelParams(
+#         bbox=BoundingBoxParams(
+#             min_x=9.9847,
+#             min_y=53.5519,
+#             max_x=9.9856,
+#             max_y=53.5522,
+#         ),
+#         level_of_geom=1,
+#         project_name="Test",
+#     ),
+# ):
+#     try:
+#         ifc_bytes = process_gml_to_ifc(
+#             gml_files,
+#             "Hamburg Buildings",
+#             "Hamburg Site",
+#             reset_model=True,
+#         )
+#
+#         return Response(
+#             content=ifc_bytes,
+#             media_type="application/x-step",
+#             headers={"Content-Disposition": f"attachment; filename=trees_{params.project_name}.ifc"},
+#         )
+#
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error generating tree model: {str(e)}")

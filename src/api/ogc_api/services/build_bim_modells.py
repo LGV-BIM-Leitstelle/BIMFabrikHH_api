@@ -75,7 +75,8 @@ def execute_generate_city_model(job_id: str, input_data: ModelParams):
             # Abort and return an error message in the response
             raise HTTPException(
                 status_code=400,
-                detail="Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. Bitte wählen Sie einen Umring erneut.",
+                detail="Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. "
+                "Bitte wählen Sie einen Umring erneut.",
             )
 
         ifc_bytes = process_gml_to_ifc(

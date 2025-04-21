@@ -63,3 +63,32 @@ content_get_process_generate_tree_model = {
     },
     "links": [],
 }
+
+content_get_process_generate_city_model = {
+    "id": "generate-city-model",
+    "title": "Generate 3D tree models as IFC",
+    "description": "Creates 3D models of trees within a given bounding box as IFC file",
+    "version": "1.0.0",
+    "inputs": {
+        "bbox": {
+            "title": "Bounding box",
+            "description": "Area of interest [min_x, min_y, max_x, max_y]",
+            "schema": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+            "default": [9.9847, 53.5519, 9.9856, 53.5522],
+        },
+        "level_of_geom": {
+            "title": "Level of geometric detail",
+            "schema": {"type": "integer", "minimum": 1, "maximum": 3},
+            "default": 1,
+        },
+        "project_name": {"title": "Project name", "schema": {"type": "string"}, "default": "Test"},
+    },
+    "outputs": {
+        "model": {
+            "title": "IFC Model",
+            "description": "Generated IFC file",
+            "schema": {"type": "string", "contentMediaType": "application/x-step"},
+        }
+    },
+    "links": [],
+}

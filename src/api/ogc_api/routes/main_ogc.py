@@ -12,11 +12,12 @@ from src.api.ogc_api.config.dict_processes import content_get_processes
 from src.api.ogc_api.config.process_definitions import (
     content_get_process_generate_tree_model,
     content_get_process_get_trees,
+    content_get_process_generate_city_model,
 )
-from src.api.ogc_api.services.UUID_dict import process_jobs
-from src.api.ogc_api.services.build_bim_modells import execute_generate_tree_model
-from src.api.ogc_api.services.get_trees import execute_get_trees
 from src.api.ogc_api.models.ogc_models import ProcessJob, JobStatus
+from src.api.ogc_api.services.UUID_dict import process_jobs
+from src.api.ogc_api.services.build_bim_modells import execute_generate_tree_model, execute_generate_city_model
+from src.api.ogc_api.services.get_trees import execute_get_trees
 
 # Routers
 router_ogc_landingpage = APIRouter(prefix="")
@@ -77,6 +78,8 @@ def get_process(process_id: str):
         return JSONResponse(content=content_get_process_get_trees)
     elif process_id == "generate-tree-model":
         return JSONResponse(content=content_get_process_generate_tree_model)
+    elif process_id == "generate-city-model":
+        return JSONResponse(content=content_get_process_generate_city_model)
     else:
         raise HTTPException(status_code=404, detail=f"Process {process_id} not found")
 
@@ -142,6 +145,8 @@ async def execute_process(
         background_tasks.add_task(execute_get_trees, job_id, parsed_inputs)
     elif process_id == "generate-tree-model":
         background_tasks.add_task(execute_generate_tree_model, job_id, parsed_inputs)
+    elif process_id == "generate-city-model":
+        background_tasks.add_task(execute_generate_city_model, job_id, parsed_inputs)
 
     return JSONResponse(content=job.model_dump(), headers={"Location": f"/processes/{process_id}/jobs/{job_id}"})
 
@@ -192,6 +197,9 @@ def get_job_results(process_id: str, job_id: str):
     if process_id == "get-trees":
         return JSONResponse(content=job.results["trees"])
     elif process_id == "generate-tree-model":
+        model_data = job.results["model"]
+        return JSONResponse(content={"url": model_data["url"]})
+    elif process_id == "generate-city-model":
         model_data = job.results["model"]
         return JSONResponse(content={"url": model_data["url"]})
     else:
