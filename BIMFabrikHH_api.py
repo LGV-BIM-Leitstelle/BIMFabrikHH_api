@@ -3,10 +3,7 @@ from fastapi.responses import JSONResponse
 
 from src.api.data_api.citymodell import router_citymodell
 from src.api.data_api.terrain import router_dgm_modell
-from alt.api_trees_ogc_last import router_trees_ogc
 from src.api.data_api.trees import router_trees
-
-#
 
 app = FastAPI(
     title="BIMFabrikHH API",
@@ -27,7 +24,6 @@ def get_frontpage():
 app.include_router(router_trees, tags=["Strassenbaumkataster Hamburg"])
 app.include_router(router_citymodell, tags=["Stadtmodell Hamburg"])
 app.include_router(router_dgm_modell, tags=["Digitales Höhenmodell Hamburg DGM 1"])
-app.include_router(router_trees_ogc, tags=["Strassenbaumkataster Hamburg OGC"])
 
 
 if __name__ == "__main__":
