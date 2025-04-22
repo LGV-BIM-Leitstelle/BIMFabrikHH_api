@@ -21,13 +21,27 @@ app.include_router(router_ogc)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
-print(OUTPUT_DIR)
 
-app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
+try:
+    app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
+    print("Mounted static files successfully.")
+except Exception as e:
+    print(f"Error mounting static files: {e}")
+    app.mount(
+        "/output",
+        StaticFiles(directory="C:/Users/Public/Python/AS_BIMFabrikHH_API/BIMFabrikHH_api/output"),
+        name="output",
+    )
+    print("Mounted static files from alternative path.")
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    # uvicorn.run("BIMFabrikHH_ogc:app", host="0.0.0.0", port=8084, reload=True)
-    uvicorn.run("BIMFabrikHH_ogc:app", host="127.0.0.1", port=8084, reload=True)
+    try:
+        uvicorn.run("BIMFabrikHH_ogc:app", host="0.0.0.0", port=8084, reload=False)
+    except Exception as e:
+        print(f"Error starting server: {e}")
+        # Fallback to localhost
+        print("Starting server on localhost...")
+        uvicorn.run("BIMFabrikHH_ogc:app", host="127.0.0.1", port=8084, reload=False)
