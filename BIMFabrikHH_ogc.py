@@ -5,12 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.ogc_api.config.app_info import app_description, app_contact, app_license_info
 from src.api.ogc_api.routes.main_ogc import (
-    router_ogc_landingpage,
-    router_ogc_joblist,
-    router_ogc_conformance,
-    router_ogc_processes,
-    router_ogc_result,
-    router_ogc_status,
+    router_ogc,
 )
 
 app = FastAPI(
@@ -21,12 +16,8 @@ app = FastAPI(
     license_info=app_license_info,
 )
 
-app.include_router(router_ogc_landingpage)
-app.include_router(router_ogc_conformance)
-app.include_router(router_ogc_processes)
-app.include_router(router_ogc_joblist)
-app.include_router(router_ogc_status)
-app.include_router(router_ogc_result)
+app.include_router(router_ogc)
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
@@ -38,6 +29,5 @@ app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
 if __name__ == "__main__":
     import uvicorn
 
-    # uvicorn.run(app, host="127.0.0.1", port=8004, reload=True)
-    # uvicorn.run("BIMFabrikHH_ogc:app", host="127.0.0.1", port=8004, reload=True)
-    uvicorn.run("BIMFabrikHH_ogc:app", host="0.0.0.1", port=8004, reload=True)
+    # uvicorn.run("BIMFabrikHH_ogc:app", host="0.0.0.0", port=8084, reload=True)
+    uvicorn.run("BIMFabrikHH_ogc:app", host="127.0.0.1", port=8084, reload=True)

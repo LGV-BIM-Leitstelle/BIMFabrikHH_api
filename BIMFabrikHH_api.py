@@ -29,7 +29,7 @@ app.include_router(router_dgm_modell, tags=["Digitales Höhenmodell Hamburg DGM 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.1", port=8003)
+    uvicorn.run(app, host="0.0.0.1", port=8083)
     # uvicorn.run(app, host="127.0.0.1", port=8003)
 
     # uvicorn BIMFabrikHH_api:processes --host 127.0.0.1 --port 8003 --reload
