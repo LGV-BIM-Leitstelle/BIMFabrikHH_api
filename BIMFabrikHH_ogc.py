@@ -23,15 +23,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
 try:
-    app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
-    print("Mounted static files successfully.")
-except Exception as e:
-    print(f"Error mounting static files: {e}")
     app.mount(
         "/output",
         StaticFiles(directory="C:/Users/Public/Python/AS_BIMFabrikHH_API/BIMFabrikHH_api/output"),
         name="output",
     )
+    print("Mounted static files successfully.")
+except Exception as e:
+    print(f"Error mounting static files: {e}")
+    app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
     print("Mounted static files from alternative path.")
 
 
