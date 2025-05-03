@@ -3,21 +3,16 @@ from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 from fastapi.responses import JSONResponse, Response
-
 from src.api.ogc_api.config.dict_conformance import content_conformance
 from src.api.ogc_api.config.dict_landing_page import content_landing_page
 from src.api.ogc_api.config.process_definitions import (
-    content_get_processes,
-    content_get_process_generate_tree_model,
-    content_get_process_get_trees,
-)
-from src.api.ogc_api.services.job_service import process_jobs
+    content_get_process_generate_tree_model, content_get_process_get_trees,
+    content_get_processes)
 from src.api.ogc_api.services.generate_trees import execute_generate_tree_model
+from src.api.ogc_api.services.job_service import process_jobs
 from src.api.ogc_api.services.tree_service import execute_get_trees
-
 # from src.api.ogc_standards.ogc_json import content_get_process_get_trees
-from src.data_models.ogc_models import ProcessInput, ProcessJob, JobStatus
-
+from src.data_models.ogc_models import JobStatus, ProcessInput, ProcessJob
 
 # Landing page (Capabilities)
 router_ogc_landingpage = APIRouter(prefix="", tags=["Capabilities"])  # OK: root should be empty, not "/"
@@ -85,7 +80,7 @@ async def execute_process(process_id: str, background_tasks: BackgroundTasks, in
     job = ProcessJob(
         id=job_id,
         status=JobStatus.accepted,
-        created=datetime.datetime.now().isoformat(),
+        created=datetime.datetime.now().isoformat()
     )
 
     # Store job
@@ -101,7 +96,7 @@ async def execute_process(process_id: str, background_tasks: BackgroundTasks, in
     return JSONResponse(
         status_code=201,
         content=job.model_dump(),
-        headers={"Location": f"/processes/{process_id}/jobs/{job_id}"},
+        headers={"Location": f"/processes/{process_id}/jobs/{job_id}"}
     )
 
 
@@ -143,7 +138,7 @@ def get_job_results(process_id: str, job_id: str):
         return Response(
             content=model_data["data"],
             media_type=model_data["content_type"],
-            headers={"Content-Disposition": f"attachment; filename={model_data['filename']}"},
+            headers={"Content-Disposition": f"attachment; filename={model_data['filename']}"}
         )
     else:
         raise HTTPException(status_code=404, detail=f"Process {process_id} not found")

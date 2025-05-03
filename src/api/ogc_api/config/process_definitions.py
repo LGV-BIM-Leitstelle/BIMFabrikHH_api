@@ -17,7 +17,12 @@ content_get_process_get_trees = {
                 },
                 "required": ["min_x", "min_y", "max_x", "max_y"],
             },
-            "default": {"min_x": 9.9733, "min_y": 53.5544, "max_x": 9.9756, "max_y": 53.5556},
+            "default": {
+                "min_x": 9.9733,
+                "min_y": 53.5544,
+                "max_x": 9.9756,
+                "max_y": 53.5556,
+            },
         },
         "crs": {
             "title": "Coordinate Reference System",
@@ -29,9 +34,19 @@ content_get_process_get_trees = {
             "schema": {"type": "integer", "minimum": 1, "maximum": 5000},
             "default": 1000,
         },
-        "skip_geometry": {"title": "Skip geometry data", "schema": {"type": "boolean"}, "default": False},
+        "skip_geometry": {
+            "title": "Skip geometry data",
+            "schema": {"type": "boolean"},
+            "default": False,
+        },
     },
-    "outputs": {"trees": {"title": "Tree data", "description": "GeoJSON data of trees", "schema": {"type": "object"}}},
+    "outputs": {
+        "trees": {
+            "title": "Tree data",
+            "description": "GeoJSON data of trees",
+            "schema": {"type": "object"},
+        }
+    },
     "links": [],
 }
 
@@ -44,7 +59,12 @@ content_get_process_generate_tree_model = {
         "bbox": {
             "title": "Bounding box",
             "description": "Area of interest [min_x, min_y, max_x, max_y]",
-            "schema": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+            "schema": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 4,
+                "maxItems": 4,
+            },
             "default": [9.9847, 53.5519, 9.9856, 53.5522],
         },
         "level_of_geom": {
@@ -52,7 +72,11 @@ content_get_process_generate_tree_model = {
             "schema": {"type": "integer", "minimum": 1, "maximum": 3},
             "default": 1,
         },
-        "project_name": {"title": "Project name", "schema": {"type": "string"}, "default": "Test"},
+        "project_name": {
+            "title": "Project name",
+            "schema": {"type": "string"},
+            "default": "Test",
+        },
     },
     "outputs": {
         "model": {
@@ -73,7 +97,12 @@ content_get_process_generate_city_model = {
         "bbox": {
             "title": "Bounding box",
             "description": "Area of interest [min_x, min_y, max_x, max_y]",
-            "schema": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+            "schema": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 4,
+                "maxItems": 4,
+            },
             "default": [9.9847, 53.5519, 9.9856, 53.5522],
         },
         "level_of_geom": {
@@ -81,7 +110,11 @@ content_get_process_generate_city_model = {
             "schema": {"type": "integer", "minimum": 1, "maximum": 3},
             "default": 1,
         },
-        "project_name": {"title": "Project name", "schema": {"type": "string"}, "default": "Test"},
+        "project_name": {
+            "title": "Project name",
+            "schema": {"type": "string"},
+            "default": "Test",
+        },
     },
     "outputs": {
         "model": {

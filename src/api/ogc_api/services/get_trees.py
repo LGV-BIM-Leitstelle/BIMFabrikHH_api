@@ -2,13 +2,13 @@ import datetime
 
 from BIMFabrikHH.core.request_oaf import HamburgOGCAPI
 from BIMFabrikHH.default.url_api import PathUrl
-from BIMFabrikHH.pydantic_models.params_tree import ModelParams
+from BIMFabrikHH.pydantic_models.params_tree import RequestParams
 
-from src.api.ogc_api.services.UUID_dict import process_jobs
-from src.api.ogc_api.models.ogc_models import JobStatus
+from ..models.ogc_models import JobStatus
+from .UUID_dict import process_jobs
 
 
-def execute_get_trees(job_id: str, input_data: ModelParams):
+def execute_get_trees(job_id: str, input_data: RequestParams):
     try:
         process_jobs[job_id].status = JobStatus.running
         process_jobs[job_id].started = datetime.datetime.now().isoformat()

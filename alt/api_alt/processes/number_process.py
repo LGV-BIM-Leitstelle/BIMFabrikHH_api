@@ -1,15 +1,11 @@
 # processes/number_process.py
 
 from typing import Dict
+
 from fastprocesses.core.base_process import BaseProcess
-from fastprocesses.core.models import (
-    ProcessDescription,
-    ProcessInput,
-    ProcessOutput,
-    Schema,
-    ProcessJobControlOptions,
-    ProcessOutputTransmission,
-)
+from fastprocesses.core.models import (ProcessDescription, ProcessInput,
+                                       ProcessJobControlOptions, ProcessOutput,
+                                       ProcessOutputTransmission, Schema)
 from fastprocesses.processes.process_registry import register_process
 
 
@@ -26,21 +22,21 @@ class NumberProcess(BaseProcess):
             "input_number": ProcessInput(
                 title="Input Number",
                 description="Number to process",
-                scheme=Schema(type="integer", minimum=1),
+                scheme=Schema(type="integer", minimum=1)
             ),
             "multiplier": ProcessInput(
                 title="Multiplier",
                 description="Number to multiply by",
-                scheme=Schema(type="integer", minimum=1),
+                scheme=Schema(type="integer", minimum=1)
             ),
         },
         outputs={
             "result": ProcessOutput(
                 title="Result",
                 description="Multiplication result",
-                scheme=Schema(type="integer"),
+                scheme=Schema(type="integer")
             )
-        },
+        }
     )
 
     async def execute(self, inputs: Dict) -> Dict:

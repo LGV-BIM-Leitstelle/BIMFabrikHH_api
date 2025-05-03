@@ -7,7 +7,7 @@ services = {"simple_process": SimpleProcess}
 app = OGCProcessesAPI(
     title="OGC BIM Process API",
     version="1.0.0",
-    description="A simple BIM API for running processes",
+    description="A simple BIM API for running processes"
 ).get_app()
 
 

@@ -1,13 +1,12 @@
 from typing import Dict, List
 
-from fastapi import APIRouter, Response, HTTPException, Query
-from fastapi.responses import JSONResponse
-
 from BIMFabrikHH.apps.baum import BaumModeller, ModelParams
 from BIMFabrikHH.apps.stadtmodell.app import process_gml_to_ifc
 from BIMFabrikHH.core.request_oaf import HamburgOGCAPI
 from BIMFabrikHH.default.url_api import PathUrl
 from BIMFabrikHH.pydantic_models.bounding_box import BoundingBoxParams
+from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi.responses import JSONResponse
 
 router_citymodell = APIRouter()
 baum_modeller = BaumModeller()
@@ -16,13 +15,13 @@ baum_modeller = BaumModeller()
 @router_citymodell.get(
     "/oaf-citymodell-tiles",
     response_class=Response,
-    description="Get Tiles-Citymodell from OGC API Features Hamburg",
+    description="Get Tiles-Citymodell from OGC API Features Hamburg"
 )
 def get_oaf_citymodell(
     min_x: float = Query(9.9733),
     min_y: float = Query(53.5544),
     max_x: float = Query(9.9756),
-    max_y: float = Query(53.5556),
+    max_y: float = Query(53.5556)
 ):
     try:
         bbox = {
@@ -53,7 +52,7 @@ def get_oaf_citymodell(
 @router_citymodell.post(
     "/generate-city-model",
     response_class=Response,
-    description="Generate an IFC model of Citymodell within the specified bounding box",
+    description="Generate an IFC model of Citymodell within the specified bounding box"
 )
 def generate_city_model(
     gml_files: List = Query(),
@@ -62,24 +61,24 @@ def generate_city_model(
             min_x=9.9847,
             min_y=53.5519,
             max_x=9.9856,
-            max_y=53.5522,
+            max_y=53.5522
         ),
         level_of_geom=1,
-        project_name="Test",
-    ),
+        project_name="Test"
+    )
 ):
     try:
         ifc_bytes = process_gml_to_ifc(
             gml_files,
             "Hamburg Buildings",
             "Hamburg Site",
-            reset_model=True,
+            reset_model=True
         )
 
         return Response(
             content=ifc_bytes,
             media_type="application/x-step",
-            headers={"Content-Disposition": f"attachment; filename=trees_{params.project_name}.ifc"},
+            headers={"Content-Disposition": f"attachment; filename=trees_{params.project_name}.ifc"}
         )
 
     except Exception as e:

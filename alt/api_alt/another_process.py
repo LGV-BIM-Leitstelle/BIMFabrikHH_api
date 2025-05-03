@@ -1,12 +1,7 @@
 from fastprocesses.core.base_process import BaseProcess
-from fastprocesses.core.models import (
-    ProcessDescription,
-    ProcessInput,
-    ProcessOutput,
-    Schema,
-    ProcessJobControlOptions,
-    ProcessOutputTransmission,
-)
+from fastprocesses.core.models import (ProcessDescription, ProcessInput,
+                                       ProcessJobControlOptions, ProcessOutput,
+                                       ProcessOutputTransmission, Schema)
 from fastprocesses.processes.process_registry import register_process
 
 
@@ -23,16 +18,16 @@ class AnotherProcess(BaseProcess):
             "input_number": ProcessInput(
                 title="Input Number",
                 description="Number to process",
-                scheme=Schema(type="integer", minimum=1),
+                scheme=Schema(type="integer", minimum=1)
             )
         },
         outputs={
             "output_result": ProcessOutput(
                 title="Output Result",
                 description="Processed result",
-                scheme=Schema(type="integer"),
+                scheme=Schema(type="integer")
             )
-        },
+        }
     )
 
     async def execute(self, inputs: dict) -> dict:

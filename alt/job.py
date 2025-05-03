@@ -1,9 +1,8 @@
 import datetime
-from typing import Dict, Any
+from typing import Any, Dict
 
 from BIMFabrikHH.pydantic_models.params_bbox import BoundingBoxParams
 from BIMFabrikHH.pydantic_models.params_tree import ModelParams
-
 from src.api.ogc_api.services.UUID_dict import process_jobs
 from src.api.ogc_api.utils.tree_modeller import BaumModeller
 from src.data_models.ogc_models import JobStatus
@@ -33,10 +32,10 @@ async def execute_generate_tree_model(job_id: str, input_data: Dict[str, Any]):
                 min_x=bbox[0],
                 min_y=bbox[1],
                 max_x=bbox[2],
-                max_y=bbox[3],
+                max_y=bbox[3]
             ),
             level_of_geom=level_of_geom,
-            project_name=project_name,
+            project_name=project_name
         )
 
         # Generate model

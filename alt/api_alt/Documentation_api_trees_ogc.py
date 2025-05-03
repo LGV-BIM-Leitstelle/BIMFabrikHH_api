@@ -1,20 +1,17 @@
 import datetime
-from typing import Dict, Any
+from typing import Any, Dict
 from uuid import uuid4
 
 from BIMFabrikHH.apps.baum import BaumModeller, ModelParams
 from BIMFabrikHH.core.request_oaf import HamburgOGCAPI
 from BIMFabrikHH.default.url_api import PathUrl
 from BIMFabrikHH.pydantic_models.params_bbox import BoundingBoxParams
-from fastapi import APIRouter, Response, HTTPException, Body, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Response
 from fastapi.responses import JSONResponse
-
 from src.api.ogc_standards.ogc_json import (
-    content_get_processes,
-    content_get_process_get_trees,
-    content_get_process_generate_tree_model,
-)
-from src.data_models.ogc_models import JobStatus, ProcessJob, ProcessInput
+    content_get_process_generate_tree_model, content_get_process_get_trees,
+    content_get_processes)
+from src.data_models.ogc_models import JobStatus, ProcessInput, ProcessJob
 
 router_trees_ogc = APIRouter(prefix="/processes")
 baum_modeller = BaumModeller()
@@ -25,7 +22,7 @@ process_jobs = {}
 @router_trees_ogc.get(
     "",
     response_class=JSONResponse,
-    description="List available processes",
+    description="List available processes"
 )
 def get_processes():
     """
@@ -44,7 +41,7 @@ def get_processes():
 @router_trees_ogc.get(
     "/{process_id}",
     response_class=JSONResponse,
-    description="Get process description",
+    description="Get process description"
 )
 def get_process(process_id: str):
     """
@@ -143,10 +140,10 @@ async def execute_generate_tree_model(job_id: str, input_data: Dict[str, Any]):
                 min_x=bbox[0],
                 min_y=bbox[1],
                 max_x=bbox[2],
-                max_y=bbox[3],
+                max_y=bbox[3]
             ),
             level_of_geom=level_of_geom,
-            project_name=project_name,
+            project_name=project_name
         )
 
         # Generate model
@@ -177,12 +174,12 @@ async def execute_generate_tree_model(job_id: str, input_data: Dict[str, Any]):
     "/{process_id}/execution",
     response_class=JSONResponse,
     description="Execute a process",
-    status_code=201,
+    status_code=201
 )
 async def execute_process(
     process_id: str,
     background_tasks: BackgroundTasks,
-    inputs: ProcessInput = Body(...),
+    inputs: ProcessInput = Body(...)
 ):
     """
     Executes a specified process, such as retrieving tree data or generating a tree model.
@@ -205,7 +202,7 @@ async def execute_process(
     job = ProcessJob(
         id=job_id,
         status=JobStatus.accepted,
-        created=datetime.datetime.now().isoformat(),
+        created=datetime.datetime.now().isoformat()
     )
 
     # Store job
@@ -221,14 +218,14 @@ async def execute_process(
     return JSONResponse(
         status_code=201,
         content=job.model_dump(),
-        headers={"Location": f"/processes/{process_id}/jobs/{job_id}"},
+        headers={"Location": f"/processes/{process_id}/jobs/{job_id}"}
     )
 
 
 @router_trees_ogc.get(
     "/{process_id}/jobs",
     response_class=JSONResponse,
-    description="List jobs for a process",
+    description="List jobs for a process"
 )
 def list_jobs(process_id: str):
     """
@@ -256,7 +253,7 @@ def list_jobs(process_id: str):
 @router_trees_ogc.get(
     "/{process_id}/jobs/{job_id}",
     response_class=JSONResponse,
-    description="Get job status",
+    description="Get job status"
 )
 def get_job(job_id: str):
     """
@@ -283,7 +280,7 @@ def get_job(job_id: str):
 @router_trees_ogc.get(
     "/{process_id}/jobs/{job_id}/results",
     response_class=Response,
-    description="Get job results",
+    description="Get job results"
 )
 def get_job_results(process_id: str, job_id: str):
     """
@@ -323,7 +320,7 @@ def get_job_results(process_id: str, job_id: str):
         return Response(
             content=model_data["data"],
             media_type=model_data["content_type"],
-            headers={"Content-Disposition": f"attachment; filename={model_data['filename']}"},
+            headers={"Content-Disposition": f"attachment; filename={model_data['filename']}"}
         )
     else:
         raise HTTPException(status_code=404, detail=f"Process {process_id} not found")

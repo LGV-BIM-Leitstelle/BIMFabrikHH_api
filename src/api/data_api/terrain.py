@@ -1,22 +1,17 @@
-from typing import Dict, List
+from typing import Dict
 
-from fastapi import APIRouter, Response, HTTPException, Query
-from fastapi.responses import JSONResponse
-
-from BIMFabrikHH.apps.baum import BaumModeller, ModelParams
-from BIMFabrikHH.apps.stadtmodell.app import process_gml_to_ifc
+from BIMFabrikHH.apps.baum.app import BaumModeller
 from BIMFabrikHH.core.request_oaf import HamburgOGCAPI
 from BIMFabrikHH.default.url_api import PathUrl
-from BIMFabrikHH.pydantic_models.params_bbox import BoundingBoxParams
+from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi.responses import JSONResponse
 
 router_dgm_modell = APIRouter()
 baum_modeller = BaumModeller()
 
 
 @router_dgm_modell.get(
-    "/get-oaf-dgm-tiles",
-    response_class=Response,
-    description="Get Tiles-DGM from OGC API Features Hamburg",
+    "/get-oaf-dgm-tiles", response_class=Response, description="Get Tiles-DGM from OGC API Features Hamburg"
 )
 def get_oaf_dgm(
     min_x: float = Query(9.9733),

@@ -1,7 +1,7 @@
-import requests
 import json
 import time
-import sys
+
+import requests
 
 # Base URL for the API
 BASE_URL = "http://127.0.0.1:8003"  # Make sure this matches your API server

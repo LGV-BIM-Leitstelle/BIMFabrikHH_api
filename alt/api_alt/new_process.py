@@ -1,16 +1,11 @@
-from typing import Dict, Any
+from typing import Any, Dict
 
 import uvicorn
 from fastprocesses.api.server import OGCProcessesAPI
 from fastprocesses.core.base_process import BaseProcess
-from fastprocesses.core.models import (
-    ProcessDescription,
-    ProcessInput,
-    ProcessJobControlOptions,
-    ProcessOutput,
-    ProcessOutputTransmission,
-    Schema,
-)
+from fastprocesses.core.models import (ProcessDescription, ProcessInput,
+                                       ProcessJobControlOptions, ProcessOutput,
+                                       ProcessOutputTransmission, Schema)
 from fastprocesses.processes.process_registry import register_process
 
 
@@ -28,7 +23,7 @@ class UppercaseProcess(BaseProcess):
             "input_text": ProcessInput(
                 title="Input Text",
                 description="Text to convert to uppercase",
-                schema=Schema(type="string", minLength=1, maxLength=1000),
+                schema=Schema(type="string", minLength=1, maxLength=1000)
             )
         },
         outputs={
@@ -37,7 +32,7 @@ class UppercaseProcess(BaseProcess):
             )
         },
         keywords=["text", "uppercase"],
-        metadata={"created": "2024-04-08", "provider": "Example Organization"},
+        metadata={"created": "2024-04-08", "provider": "Example Organization"}
     )
 
     async def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -60,7 +55,7 @@ class LowercaseProcess(BaseProcess):
             "input_text": ProcessInput(
                 title="Input Text",
                 description="Text to convert to lowercase",
-                schema=Schema(type="string", minLength=1, maxLength=1000),
+                schema=Schema(type="string", minLength=1, maxLength=1000)
             )
         },
         outputs={
@@ -69,7 +64,7 @@ class LowercaseProcess(BaseProcess):
             )
         },
         keywords=["text", "lowercase"],
-        metadata={"created": "2024-04-08", "provider": "Example Organization"},
+        metadata={"created": "2024-04-08", "provider": "Example Organization"}
     )
 
     async def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -92,7 +87,7 @@ class TextCounterProcess(BaseProcess):
             "input_text": ProcessInput(
                 title="Input Text",
                 description="Text to analyze",
-                schema=Schema(type="string", minLength=1, maxLength=10000),
+                schema=Schema(type="string", minLength=1, maxLength=10000)
             )
         },
         outputs={
@@ -107,7 +102,7 @@ class TextCounterProcess(BaseProcess):
             ),
         },
         keywords=["text", "analysis", "count"],
-        metadata={"created": "2024-04-08", "provider": "Example Organization"},
+        metadata={"created": "2024-04-08", "provider": "Example Organization"}
     )
 
     async def execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -124,7 +119,7 @@ class TextCounterProcess(BaseProcess):
 app = OGCProcessesAPI(
     title="FastProcesses API",
     description="API for various data processing tasks...",
-    version="1.0.0",
+    version="1.0.0"
 )
 
 if __name__ == "__main__":

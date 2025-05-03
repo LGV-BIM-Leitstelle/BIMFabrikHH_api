@@ -1,13 +1,12 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-
 from src.app_trees import router_trees
 
 app = FastAPI(
     title="BIMFabrikHH API",
     description="API for creating IFC models based on GIS Data",
     version="1.0.0",
-    # swagger_ui_parameters={"defaultModelsExpandDepth": 0},
+    # swagger_ui_parameters={"defaultModelsExpandDepth": 0}
 )
 
 

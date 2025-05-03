@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any, Dict
 
 import uvicorn
 from BIMFabrikHH.apps.baum import BaumModeller
@@ -7,16 +7,10 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from fastprocesses.api.server import OGCProcessesAPI
 from fastprocesses.core.base_process import BaseProcess
-from fastprocesses.core.models import (
-    ProcessDescription,
-    ProcessInput,
-    ProcessJobControlOptions,
-    ProcessOutput,
-    ProcessOutputTransmission,
-    Schema,
-)
+from fastprocesses.core.models import (ProcessDescription, ProcessInput,
+                                       ProcessJobControlOptions, ProcessOutput,
+                                       ProcessOutputTransmission, Schema)
 from fastprocesses.processes.process_registry import register_process
-
 
 baum_modeller = BaumModeller()
 
@@ -34,18 +28,18 @@ class SimpleProcess(BaseProcess):
             "input_bbox": ProcessInput(
                 title="Bounding Box",
                 description="Bounding box to search for trees",
-                scheme=Schema(type="object"),
+                scheme=Schema(type="object")
             )
         },
         outputs={
             "output_data": ProcessOutput(
                 title="Tree Data",
                 description="IFC tree model data",
-                scheme=Schema(type="object"),
+                scheme=Schema(type="object")
             )
         },
         keywords=["tree", "IFC", "model"],
-        metadata={"created": "2024-02-19", "provider": "Example Organization"},
+        metadata={"created": "2024-02-19", "provider": "Example Organization"}
     )
 
     async def execute(self, inputs: Dict[str, Any], **kwargs: Any):
@@ -69,7 +63,7 @@ class SimpleProcess(BaseProcess):
 app = OGCProcessesAPI(
     title="Simple Process API",
     version="1.0.0",
-    description="A simple API for running processes",
+    description="A simple API for running processes"
 ).get_app()
 
 if __name__ == "__main__":

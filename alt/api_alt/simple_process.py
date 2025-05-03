@@ -1,12 +1,7 @@
 from fastprocesses.core.base_process import BaseProcess
-from fastprocesses.core.models import (
-    ProcessDescription,
-    ProcessInput,
-    ProcessOutput,
-    Schema,
-    ProcessJobControlOptions,
-    ProcessOutputTransmission,
-)
+from fastprocesses.core.models import (ProcessDescription, ProcessInput,
+                                       ProcessJobControlOptions, ProcessOutput,
+                                       ProcessOutputTransmission, Schema)
 from fastprocesses.processes.process_registry import register_process
 
 
@@ -23,16 +18,16 @@ class SimpleProcess(BaseProcess):
             "input_text": ProcessInput(
                 title="Input Text",
                 description="Text to process",
-                scheme=Schema(type="string", minLength=1, maxLength=1000),
+                scheme=Schema(type="string", minLength=1, maxLength=1000)
             )
         },
         outputs={
             "output_text": ProcessOutput(
                 title="Output Text",
                 description="Processed text",
-                scheme=Schema(type="string"),
+                scheme=Schema(type="string")
             )
-        },
+        }
     )
 
     async def execute(self, inputs: dict) -> dict:

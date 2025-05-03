@@ -1,30 +1,29 @@
 import datetime
 from uuid import uuid4
 
-from BIMFabrikHH.pydantic_models.params_tree import ModelParams
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Body
+from BIMFabrikHH.pydantic_models.params_tree import RequestParams
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
-
 from src.api.ogc_api.config.dict_conformance import content_conformance
 from src.api.ogc_api.config.dict_landing_page import content_landing_page
 from src.api.ogc_api.config.dict_processes import content_get_processes
 from src.api.ogc_api.config.process_definitions import (
+    content_get_process_generate_city_model,
     content_get_process_generate_tree_model,
     content_get_process_get_trees,
-    content_get_process_generate_city_model,
 )
-from src.api.ogc_api.models.ogc_models import ProcessJob, JobStatus
-from src.api.ogc_api.services.UUID_dict import process_jobs
-from src.api.ogc_api.services.build_bim_modells import execute_generate_tree_model, execute_generate_city_model
+from src.api.ogc_api.models.ogc_models import JobStatus, ProcessJob
+from src.api.ogc_api.services.build_bim_modells import execute_generate_city_model, execute_generate_tree_model
 from src.api.ogc_api.services.get_trees import execute_get_trees
+from src.api.ogc_api.services.UUID_dict import process_jobs
 
 router_ogc = APIRouter()
 
 
 PROCESS_INPUT_MODELS = {
-    "get-trees": ModelParams,
-    "generate-tree-model": ModelParams,
+    "get-trees": RequestParams,
+    "generate-tree-model": RequestParams,
 }
 
 
@@ -95,18 +94,9 @@ def get_jobs():
     summary="Execute Process",
     description="Executes a specified process with provided input parameters and creates a job.",
 )
-def execute_process(
-    processID: str,
-    background_tasks: BackgroundTasks,
-    inputs: ModelParams = Body(..., embed=True),
-):
+def execute_process(processID: str, background_tasks: BackgroundTasks, inputs: RequestParams = Body(..., embed=True)):
     jobId = str(uuid4())
-    job = ProcessJob(
-        id=jobId,
-        status=JobStatus.accepted,
-        created=datetime.datetime.now().isoformat(),
-        type=processID,
-    )
+    job = ProcessJob(id=jobId, status=JobStatus.accepted, created=datetime.datetime.now().isoformat(), type=processID)
     process_jobs[jobId] = job
 
     # Check if we have a model for this process
