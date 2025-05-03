@@ -5,6 +5,7 @@ from BIMFabrikHH.pydantic_models.params_tree import RequestParams
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
+
 from src.api.ogc_api.config.dict_conformance import content_conformance
 from src.api.ogc_api.config.dict_landing_page import content_landing_page
 from src.api.ogc_api.config.dict_processes import content_get_processes
@@ -14,16 +15,21 @@ from src.api.ogc_api.config.process_definitions import (
     content_get_process_get_trees,
 )
 from src.api.ogc_api.models.ogc_models import JobStatus, ProcessJob
-from src.api.ogc_api.services.build_bim_modells import execute_generate_city_model, execute_generate_tree_model
-from src.api.ogc_api.services.get_trees import execute_get_trees
 from src.api.ogc_api.services.UUID_dict import process_jobs
+from src.api.ogc_api.services.generate_bim_modells import (
+    execute_generate_city_model,
+    execute_generate_tree_model,
+    execute_generate_dgm_model,
+)
+from src.api.ogc_api.services.get_trees import execute_get_trees
 
 router_ogc = APIRouter()
 
 
 PROCESS_INPUT_MODELS = {
-    "get-trees": RequestParams,
     "generate-tree-model": RequestParams,
+    "generate-city-model": RequestParams,
+    "generate-dgm-model": RequestParams,
 }
 
 
@@ -109,13 +115,12 @@ def execute_process(processID: str, background_tasks: BackgroundTasks, inputs: R
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
 
-    # Dispatch to the correct handler
-    if processID == "get-trees":
-        background_tasks.add_task(execute_get_trees, jobId, parsed_inputs)
-    elif processID == "generate-tree-model":
+    if processID == "generate-tree-model":
         background_tasks.add_task(execute_generate_tree_model, jobId, parsed_inputs)
     elif processID == "generate-city-model":
         background_tasks.add_task(execute_generate_city_model, jobId, parsed_inputs)
+    elif processID == "generate-dgm-model":
+        background_tasks.add_task(execute_generate_dgm_model, jobId, parsed_inputs)
 
     return JSONResponse(content=job.model_dump(), headers={"Location": f"/processes/{processID}/jobs/{jobId}"})
 
@@ -163,16 +168,12 @@ def get_job_results(jobId: str):
     if job.status != JobStatus.successful:
         raise HTTPException(status_code=404, detail=f"Results not available. Job status: {job.status}")
 
-    # Determine processID from the job type (assuming it's part of the job's metadata)
-    processID = job.type  # This assumes the job contains a 'type' field indicating the process
+    processID = job.type
 
-    if processID == "get-trees":
-        return JSONResponse(content=job.results["trees"])
-    elif processID == "generate-tree-model":
-        model_data = job.results["model"]
-        return JSONResponse(content={"url": model_data["url"]})
-    elif processID == "generate-city-model":
-        model_data = job.results["model"]
+    if processID in PROCESS_INPUT_MODELS.keys():
+        model_data = job.results.get("model")
+        if not model_data:
+            raise HTTPException(status_code=404, detail="Model data not found in job results")
         return JSONResponse(content={"url": model_data["url"]})
     else:
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")

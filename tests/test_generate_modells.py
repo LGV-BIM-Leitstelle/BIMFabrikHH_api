@@ -2,7 +2,7 @@ from BIMFabrikHH.apps.baum.app import BaumModeller
 from BIMFabrikHH.pydantic_models.params_bbox import BoundingBoxParams
 from BIMFabrikHH.pydantic_models.params_tree import ModelParams, ProjectInfos, RequestParams
 from src.api.ogc_api.models.ogc_models import JobStatus
-from src.api.ogc_api.services.build_bim_modells import (
+from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_city_model,
     execute_generate_dgm_model,
     execute_generate_tree_model,
