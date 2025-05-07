@@ -6,15 +6,11 @@ from starlette.middleware.cors import CORSMiddleware
 app = FastAPI(title="BIMFabrikHH API", description="API for creating IFC models based on GIS Data", version="1.0.0")
 
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"],
-    allow_headers=["Content-Type"],
+    CORSMiddleware, allow_origins=["*"], allow_credentials=False, allow_methods=["*"], allow_headers=["*"]
 )
 
 
-@app.get("/", include_in_schema=False)
+@app.get("/bimfabrikhh-datasets/", include_in_schema=False)
 def get_frontpage():
     return JSONResponse(content={"message": "Server is running"})
 
@@ -27,7 +23,7 @@ if __name__ == "__main__":
 
     # uvicorn BIMFabrikHH_api:app --reload
 
-    server = False
+    server = True
     if server:
         uvicorn.run("BIMFabrikHH_api:app", host="0.0.0.0", port=8083, reload=True)
     else:

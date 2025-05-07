@@ -2,6 +2,8 @@ import os
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.cors import CORSMiddleware
+
 from src.api.ogc_api.config.app_info import app_contact, app_description, app_license_info
 from src.api.ogc_api.routes.main_ogc import router_ogc
 
@@ -11,6 +13,10 @@ app = FastAPI(
     version="1.0.0",
     contact=app_contact,
     license_info=app_license_info,
+)
+
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_credentials=False, allow_methods=["*"], allow_headers=["*"]
 )
 
 app.include_router(router_ogc)
@@ -35,9 +41,9 @@ except Exception as e:
 if __name__ == "__main__":
     import uvicorn
 
-    try:
-        uvicorn.run("BIMFabrikHH_ogc:app", host="127.0.0.1", port=8084, reload=False)
-    except Exception as e:
-        print(f"Error starting server: {e}")
-        uvicorn.run("BIMFabrikHH_ogc:app", host="0.0.0.0", port=8084, reload=False)
+    server = True
+    if server:
+        uvicorn.run("BIMFabrikHH_ogc:app", host="0.0.0.0", port=8084, reload=True)
+    else:
         print("Starting server on localhost...")
+        uvicorn.run("BIMFabrikHH_ogc:app", host="127.0.0.1", port=8084, reload=True)

@@ -12,7 +12,7 @@ baum_modeller = BaumModeller()
 
 
 @router.get(
-    "/oaf-trees",
+    "/bimfabrikhh-datasets/oaf-trees",
     response_class=Response,
     tags=["Strassenbaumkataster Hamburg"],
     description="Get trees from OGC API Features Hamburg",
@@ -28,7 +28,7 @@ def get_oaf_trees(bbox: BoundingBoxParams = Depends()):
 
 
 @router.get(
-    "/oaf-citymodell-tiles",
+    "/bimfabrikhh-datasets/oaf-citymodell-tiles",
     response_class=Response,
     tags=["Stadtmodell Hamburg"],
     description="Get Tiles-Citymodell from OGC API Features Hamburg",
@@ -44,7 +44,7 @@ def get_oaf_citymodell(bbox: BoundingBoxParams = Depends()):
 
 
 @router.get(
-    "/get-oaf-dgm-tiles",
+    "/bimfabrikhh-datasets/get-oaf-dgm-tiles",
     response_class=Response,
     tags=["Digitales Höhenmodell Hamburg DGM 1"],
     description="Get Tiles-DGM from OGC API Features Hamburg",
