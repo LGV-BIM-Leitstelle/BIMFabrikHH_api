@@ -24,9 +24,9 @@ class ProcessJob(BaseModel):
     type: str = "process"
 
 
-class ProcessInput(BaseModel):
-    bbox: List[float] = Field(..., description="Bounding box [min_x, min_y, max_x, max_y]")
-
-    crs: str = Field("http://www.opengis.net/def/crs/EPSG/0/25832", description="Coordinate reference system")
-    limit: int = Field(2000, description="Maximum number of features to return")
-    skip_geometry: bool = Field(True, description="Skip geometry in response")
+# class ProcessInput(BaseModel):
+#     bbox: List[float] = Field(..., description="Bounding box [min_x, min_y, max_x, max_y]")
+#
+#     crs: str = Field("http://www.opengis.net/def/crs/EPSG/0/25832", description="Coordinate reference system")
+#     limit: int = Field(2000, description="Maximum number of features to return")
+#     skip_geometry: bool = Field(True, description="Skip geometry in response")

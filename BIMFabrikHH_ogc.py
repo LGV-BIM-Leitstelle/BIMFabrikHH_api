@@ -41,7 +41,7 @@ except Exception as e:
 if __name__ == "__main__":
     import uvicorn
 
-    server = True
+    server = False
     if server:
         uvicorn.run("BIMFabrikHH_ogc:app", host="0.0.0.0", port=8084, reload=True)
     else:

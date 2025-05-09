@@ -62,7 +62,6 @@ def execute_generate_city_model(job_id: str, input_data: RequestParams):
         y2 = input_data.bbox.max_y
 
         gml_files = HamburgOGCAPI.get_tiles(x1, y1, x2, y2, model_type="citymodel")
-        print(gml_files)
 
         if len(gml_files) > 4:
             raise HTTPException(
@@ -125,7 +124,7 @@ def execute_generate_dgm_model(job_id: str, input_data: RequestParams):
         folder = check_folder_exists("dgm_hamburg")
 
         # Process the folder and create the IFC file
-        ifc_bytes = process_terrain_folder_to_ifc(folder, tif_files)
+        ifc_bytes = process_terrain_folder_to_ifc(folder_path=folder, tif_files=tif_files, input_data=input_data)
 
         update_job_status(job_id, progress=75)
 

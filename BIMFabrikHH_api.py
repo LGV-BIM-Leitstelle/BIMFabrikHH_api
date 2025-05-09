@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     # uvicorn BIMFabrikHH_api:app --reload
 
-    server = True
+    server = False
     if server:
         uvicorn.run("BIMFabrikHH_api:app", host="0.0.0.0", port=8083, reload=True)
     else:
