@@ -6,7 +6,7 @@ proxies = {
     "https": None,
 }
 # url = "http://gv-srv-w00186:8083/oaf-trees?min_x=9.9733&min_y=53.5544&max_x=9.9756&max_y=53.5556"
-url = "https://gv-srv-w00186:8088/oaf-trees?min_x=9.9733&min_y=53.5544&max_x=9.9756&max_y=53.5556"
+url = "https://gv-srv-w00186:8088/bimfabrikhh-datasets/oaf-trees?min_x=9.9733&min_y=53.5544&max_x=9.9756&max_y=53.5556"
 
 response = requests.get(url, proxies=proxies, verify=False, timeout=30)
 # response = requests.get(url, verify=False)  # No proxy

@@ -1,14 +1,13 @@
 import requests
 
-url = "http://gv-srv-w00186:8084/output/Baeume_20250422_175110_c0972eea-8d70-4526-ad7d-1ad08e9a439e.ifc"
-
+url = "https://gv-srv-w00186:8088/output/Baeume_20250509_164545_c0592bf9-1c98-4451-aa28-1b7e10bb6a94.ifc"
 
 proxies = {
     "http": None,
     "https": None,
 }
 
-response = requests.get(url, proxies=proxies)
+response = requests.get(url, proxies=proxies, verify=False)
 
 if response.status_code == 200:
     with open("downloaded_file.ifc", "wb") as f:

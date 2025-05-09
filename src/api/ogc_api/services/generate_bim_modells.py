@@ -27,7 +27,8 @@ def execute_generate_tree_model(job_id: str, input_data: RequestParams):
         update_job_status(job_id, status=JobStatus.running, started=datetime.datetime.now().isoformat(), progress=50)
 
         ifc_bytes = baum_modeller.create_tree_model(input_data)
-        filename, url = save_ifc_file_on_server(ifc_bytes, "Baeume", job_id)
+
+        filename, url_http, url_https = save_ifc_file_on_server(ifc_bytes, "Baeume", job_id)
 
         update_job_status(
             job_id,
@@ -38,7 +39,8 @@ def execute_generate_tree_model(job_id: str, input_data: RequestParams):
                 "model": {
                     "filename": filename,
                     "content_type": "application/x-step",
-                    "url": url,
+                    "url-http": url_http,
+                    "url-https": url_https,
                 }
             },
         )
@@ -76,7 +78,7 @@ def execute_generate_city_model(job_id: str, input_data: RequestParams):
 
         update_job_status(job_id, progress=75)
 
-        filename, url = save_ifc_file_on_server(ifc_bytes, "Stadtmodell", job_id)
+        filename, url_http, url_https = save_ifc_file_on_server(ifc_bytes, "Stadtmodell", job_id)
 
         update_job_status(
             job_id,
@@ -87,7 +89,8 @@ def execute_generate_city_model(job_id: str, input_data: RequestParams):
                 "model": {
                     "filename": filename,
                     "content_type": "application/x-step",
-                    "url": url,
+                    "url-http": url_http,
+                    "url-https": url_https,
                 }
             },
         )
@@ -128,7 +131,7 @@ def execute_generate_dgm_model(job_id: str, input_data: RequestParams):
 
         update_job_status(job_id, progress=75)
 
-        filename, url = save_ifc_file_on_server(ifc_bytes, "DGM", job_id)
+        filename, url_http, url_https = save_ifc_file_on_server(ifc_bytes, "DGM", job_id)
 
         update_job_status(
             job_id,
@@ -139,7 +142,8 @@ def execute_generate_dgm_model(job_id: str, input_data: RequestParams):
                 "model": {
                     "filename": filename,
                     "content_type": "application/x-step",
-                    "url": url,
+                    "url-http": url_http,
+                    "url-https": url_https,
                 }
             },
         )

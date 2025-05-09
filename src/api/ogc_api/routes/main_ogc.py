@@ -12,7 +12,7 @@ from src.api.ogc_api.config.dict_processes import content_get_processes
 from src.api.ogc_api.config.process_definitions import (
     content_get_process_generate_city_model,
     content_get_process_generate_tree_model,
-    content_get_process_get_trees,
+    content_get_process_generate_dgm_model,
 )
 from src.api.ogc_api.models.ogc_models import JobStatus, ProcessJob
 from src.api.ogc_api.services.UUID_dict import process_jobs
@@ -21,7 +21,7 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_tree_model,
     execute_generate_dgm_model,
 )
-from src.api.ogc_api.services.get_trees import execute_get_trees
+
 
 router_ogc = APIRouter()
 
@@ -74,12 +74,12 @@ def get_processes():
     description="Returns the description and input/output schema of a specific process.",
 )
 def get_process(processID: str):
-    if processID == "get-trees":
-        return JSONResponse(content=content_get_process_get_trees)
-    elif processID == "generate-tree-model":
+    if processID == "generate-tree-model":
         return JSONResponse(content=content_get_process_generate_tree_model)
     elif processID == "generate-city-model":
         return JSONResponse(content=content_get_process_generate_city_model)
+    elif processID == "generate-dgm-model":
+        return JSONResponse(content=content_get_process_generate_dgm_model)
     else:
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")
 
@@ -174,6 +174,6 @@ def get_job_results(jobId: str):
         model_data = job.results.get("model")
         if not model_data:
             raise HTTPException(status_code=404, detail="Model data not found in job results")
-        return JSONResponse(content={"url": model_data["url"]})
+        return JSONResponse(content={"url-http": model_data["url-http"], "url-https": model_data["url-https"]})
     else:
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")
