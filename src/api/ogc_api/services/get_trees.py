@@ -35,6 +35,7 @@ def execute_get_trees(job_id: str, input_data: RequestParams):
         process_jobs[job_id].results = {"trees": trees_data}
 
     except Exception as e:
+        # TODO: Wenn die Exception ein KeyError war weil job_id nicht existiert, gibts einfach den nächsten Fehler
         process_jobs[job_id].status = JobStatus.failed
         process_jobs[job_id].finished = datetime.datetime.now().isoformat()
         process_jobs[job_id].message = f"Error fetching tree data: {str(e)}"

@@ -25,7 +25,7 @@ from src.api.ogc_api.services.generate_bim_modells import (
 
 router_ogc = APIRouter()
 
-
+# TODO: Notwendgikeit dieses Dictionaries erschließt sich mir nicht
 PROCESS_INPUT_MODELS = {
     "generate-tree-model": RequestParams,
     "generate-city-model": RequestParams,
@@ -110,8 +110,14 @@ def execute_process(processID: str, background_tasks: BackgroundTasks, inputs: R
     if not input_model_cls:
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")
 
+    # TODO: ALTERNATIVE:
+    if processID not in ["generate-tree-model", "generate-city-model", "generate-dgm-model"]:
+        raise HTTPException(status_code=404, detail=f"Process {processID} not found")
+
+    # ALTERNATIVE ENDE
+
     try:
-        parsed_inputs = inputs
+        parsed_inputs = inputs # TODO: Wieso? hier wird doch gar nichts geparst sondern 1:1 kopiert. Kann weg
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
 
@@ -170,7 +176,10 @@ def get_job_results(jobId: str):
 
     processID = job.type
 
-    if processID in PROCESS_INPUT_MODELS.keys():
+    # if processID in PROCESS_INPUT_MODELS.keys(): TODO: Das kann dann weg, wenn du die alternative nimmst
+
+    # TODO: ALTERNATIVE:
+    if processID not in ["generate-tree-model", "generate-city-model", "generate-dgm-model"]:
         model_data = job.results.get("model")
         if not model_data:
             raise HTTPException(status_code=404, detail="Model data not found in job results")
