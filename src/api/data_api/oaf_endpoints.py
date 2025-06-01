@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 from BIMFabrikHH.apps.baum.app import BaumModeller
@@ -9,6 +10,8 @@ from fastapi.responses import JSONResponse
 router = APIRouter()
 
 baum_modeller = BaumModeller()
+
+LOGGER = logging.getLogger(__name__)
 
 
 @router.get(
@@ -24,6 +27,7 @@ def get_oaf_trees(bbox: BoundingBoxParams = Depends()):
 
         return JSONResponse(content=trees_data)
     except Exception as e:
+        LOGGER.error("An error occurred: %s" % e)
         raise HTTPException(status_code=500, detail=f"Error fetching tree data: {str(e)}")
 
 
@@ -40,6 +44,7 @@ def get_oaf_citymodell(bbox: BoundingBoxParams = Depends()):
         )
         return JSONResponse(content=citymodel_tiles)
     except Exception as e:
+        LOGGER.error("An error occurred: %s" % e)
         raise HTTPException(status_code=500, detail=f"Error fetching citymodel tiles: {str(e)}")
 
 
@@ -56,4 +61,5 @@ def get_oaf_dgm(bbox: BoundingBoxParams = Depends()):
         )
         return JSONResponse(content=dgm_tiles)
     except Exception as e:
+        LOGGER.error("An error occurred: %s" % e)
         raise HTTPException(status_code=500, detail=f"Error fetching DGM tiles: {str(e)}")
