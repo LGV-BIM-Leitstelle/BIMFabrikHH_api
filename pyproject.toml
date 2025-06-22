@@ -16,7 +16,6 @@ ifcopenshell = "^0.8.1.post1"
 icosphere = "^0.1.3"
 ifcpatch = "^0.8.1"
 openpyxl = "^3.1.5"
-bimfabrikhh = {path = "C:/_Lokale_Daten_ungesichert/__GitHubProjects/BIMFabrikHH_core", develop = true}
 
 
 [tool.poetry.group.dev.dependencies]
@@ -26,3 +25,7 @@ uvicorn = "^0.34.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+start-api = "BIMFabrikHH_api:main"
+start-ogc = "BIMFabrikHH_ogc:main"

@@ -18,7 +18,7 @@ def get_frontpage():
 app.include_router(oaf_router)
 
 
-if __name__ == "__main__":
+def main():
     import uvicorn
 
     # uvicorn BIMFabrikHH_api:app --reload

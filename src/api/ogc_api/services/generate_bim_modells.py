@@ -6,55 +6,63 @@ from BIMFabrikHH.apps.stadtmodell.app import process_gml_to_ifc
 from BIMFabrikHH.core.folder_utils import check_folder_exists
 from BIMFabrikHH.core.request_oaf import HamburgOGCAPI
 from BIMFabrikHH.pydantic_models.params_tree import RequestParams
-from fastapi import HTTPException
+# from fastapi import HTTPException
 
 from ..models.ogc_models import JobStatus
 from ..utils.ifc_filemanager import save_ifc_file_on_server
-from .UUID_dict import process_jobs
+# from .UUID_dict import process_jobs
 
 baum_modeller = BaumModeller()
 
 
+"""
 def update_job_status(job_id, **kwargs):
     job = process_jobs[job_id]
     for key, value in kwargs.items():
         if value is not None:
             setattr(job, key, value)
+"""
 
+from celery import Celery
 
-def execute_generate_tree_model(job_id: str, input_data: RequestParams):
-    try:
-        update_job_status(job_id, status=JobStatus.running, started=datetime.datetime.now().isoformat(), progress=50)
+app = Celery(
+    "hamburg",
+    broker="sqla+sqlite:///celerydb.sqlite",
+    backend="db+sqlite:///celerydb.sqlite",
+    # include=["proj.tasks"],
+)
 
-        ifc_bytes = baum_modeller.create_tree_model(input_data)
+@app.task(bind=True)
+def execute_generate_tree_model(self, input_data: dict):
+    self.update_state(
+        state="PROGRESS",
+        meta={"percent": 0}
+    )
 
-        filename, url_http, url_https = save_ifc_file_on_server(ifc_bytes, "Baeume", job_id)
+    ifc_bytes = baum_modeller.create_tree_model(RequestParams(**input_data))
 
-        update_job_status(
-            job_id,
-            status=JobStatus.successful,
-            progress=100,
-            finished=datetime.datetime.now().isoformat(),
-            results={
-                "model": {
-                    "filename": filename,
-                    "content_type": "application/x-step",
-                    "url-http": url_http,
-                    "url-https": url_https,
-                }
-            },
-        )
+    filename, url_http, url_https = save_ifc_file_on_server(ifc_bytes, "Baeume", self.request.id)
 
-    except Exception as e:
-        update_job_status(
-            job_id,
-            status=JobStatus.failed,
-            finished=datetime.datetime.now().isoformat(),
-            message=f"Error generating tree model: {str(e)}",
-        )
+    self.update_state(
+        state="PROGRESS",
+        meta={
+            "percent": 100,
+        }
+    )
+    
+    return {
+        "model": {
+            "filename": filename,
+            "content_type": "application/x-step",
+            "url-http": url_http,
+            "url-https": url_https,
+        }
+    }
 
-
+@app.task(bind=True)
 def execute_generate_city_model(job_id: str, input_data: RequestParams):
+    pass
+    """
     try:
         update_job_status(job_id, status=JobStatus.running, started=datetime.datetime.now().isoformat(), progress=25)
 
@@ -102,9 +110,12 @@ def execute_generate_city_model(job_id: str, input_data: RequestParams):
             finished=datetime.datetime.now().isoformat(),
             message=f"Error generating city model: {str(e)}",
         )
+    """
 
-
+@app.task(bind=True)
 def execute_generate_dgm_model(job_id: str, input_data: RequestParams):
+    pass
+    """
     try:
         update_job_status(job_id, status=JobStatus.running, started=datetime.datetime.now().isoformat(), progress=25)
 
@@ -155,3 +166,4 @@ def execute_generate_dgm_model(job_id: str, input_data: RequestParams):
             finished=datetime.datetime.now().isoformat(),
             message=f"Error generating DGM model: {str(e)}",
         )
+    """

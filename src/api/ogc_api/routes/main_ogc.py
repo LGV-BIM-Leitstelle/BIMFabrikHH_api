@@ -2,7 +2,7 @@ import datetime
 from uuid import uuid4
 
 from BIMFabrikHH.pydantic_models.params_tree import RequestParams
-from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
@@ -20,8 +20,9 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_city_model,
     execute_generate_tree_model,
     execute_generate_dgm_model,
+    app
 )
-
+from celery.result import AsyncResult
 
 router_ogc = APIRouter()
 
@@ -100,10 +101,8 @@ def get_jobs():
     summary="Execute Process",
     description="Executes a specified process with provided input parameters and creates a job.",
 )
-def execute_process(processID: str, background_tasks: BackgroundTasks, inputs: RequestParams = Body(..., embed=True)):
+def execute_process(processID: str, inputs: RequestParams = Body(..., embed=True)):
     jobId = str(uuid4())
-    job = ProcessJob(id=jobId, status=JobStatus.accepted, created=datetime.datetime.now().isoformat(), type=processID)
-    process_jobs[jobId] = job
 
     # Check if we have a model for this process
     input_model_cls = PROCESS_INPUT_MODELS.get(processID)
@@ -111,16 +110,20 @@ def execute_process(processID: str, background_tasks: BackgroundTasks, inputs: R
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")
 
     try:
+        # this doesn't do anything?
         parsed_inputs = inputs
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
 
     if processID == "generate-tree-model":
-        background_tasks.add_task(execute_generate_tree_model, jobId, parsed_inputs)
+        # background_tasks.add_task(execute_generate_tree_model, jobId, parsed_inputs)
+        jobId = execute_generate_tree_model.delay(parsed_inputs.dict()).id
     elif processID == "generate-city-model":
         background_tasks.add_task(execute_generate_city_model, jobId, parsed_inputs)
     elif processID == "generate-dgm-model":
         background_tasks.add_task(execute_generate_dgm_model, jobId, parsed_inputs)
+
+    job = ProcessJob(id=jobId, status=JobStatus.accepted, created=datetime.datetime.now().isoformat(), type=processID)
 
     return JSONResponse(content=job.model_dump(), headers={"Location": f"/processes/{processID}/jobs/{jobId}"})
 
@@ -161,19 +164,9 @@ def cancel_job(jobId: str):
     description="Returns the results of a successfully executed job.",
 )
 def get_job_results(jobId: str):
-    job = process_jobs.get(jobId)
-    if not job:
-        raise HTTPException(status_code=404, detail=f"Job {jobId} not found")
-
-    if job.status != JobStatus.successful:
-        raise HTTPException(status_code=404, detail=f"Results not available. Job status: {job.status}")
-
-    processID = job.type
-
-    if processID in PROCESS_INPUT_MODELS.keys():
-        model_data = job.results.get("model")
-        if not model_data:
-            raise HTTPException(status_code=404, detail="Model data not found in job results")
+    job = AsyncResult(jobId, app=app)
+    if job.state == 'SUCCESS':
+        model_data = job.result.get("model")
         return JSONResponse(content={"url-http": model_data["url-http"], "url-https": model_data["url-https"]})
     else:
-        raise HTTPException(status_code=404, detail=f"Process {processID} not found")
+        raise HTTPException(status_code=404, detail=f"Process {jobId} not found")

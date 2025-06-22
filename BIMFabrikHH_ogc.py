@@ -28,7 +28,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 try:
     app.mount(
         "/output",
-        StaticFiles(directory="C:/Users/Public/Python/AS_BIMFabrikHH_API/BIMFabrikHH_api/output"),
+        StaticFiles(directory="./output"),
         name="output",
     )
     print("Mounted static files successfully.")
@@ -38,7 +38,7 @@ except Exception as e:
     print(f"Mounted static files from alternative path. {OUTPUT_DIR}")
 
 
-if __name__ == "__main__":
+def main():
     import uvicorn
 
     server = True
@@ -47,3 +47,7 @@ if __name__ == "__main__":
     else:
         print("Starting server on localhost...")
         uvicorn.run("BIMFabrikHH_ogc:app", host="127.0.0.1", port=8084, reload=True)
+
+
+if __name__ == "__main__":
+    main()

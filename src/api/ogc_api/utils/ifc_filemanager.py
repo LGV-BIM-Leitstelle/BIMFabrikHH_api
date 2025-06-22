@@ -14,7 +14,7 @@ def save_ifc_file_on_server(ifc_bytes: bytes, prefix: str, job_id: str) -> tuple
     with open(file_path, "wb") as f:
         f.write(ifc_bytes)
 
-    url_http = f"http://gv-srv-w00186:8084/output/{filename}"
+    url_http = f"output/{filename}"
     url_https = f"https://gv-srv-w00186:8088/output/{filename}"
 
     return filename, url_http, url_https
