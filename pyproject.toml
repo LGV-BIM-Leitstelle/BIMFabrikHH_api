@@ -1,0 +1,85 @@
+[tool.poetry]
+name = "bimfabrikhh-api"
+version = "0.1.0"
+description = "BIMFabrikHH API - OGC API Processes for automated IFC model generation"
+authors = ["Ahmed Salem <ahmed.salem@gv.hamburg.de>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/LGV-BIM-Leitstelle/BIMFabrikHH_api"
+repository = "https://github.com/LGV-BIM-Leitstelle/BIMFabrikHH_api"
+keywords = ["BIM", "IFC", "API", "OGC", "FastAPI", "Hamburg", "geospatial"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: GIS",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Framework :: FastAPI",
+]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.12"
+fastapi = "^0.115.8"
+requests = "^2.32.3"
+celery = "^5.5.3"
+python-dotenv = "^1.1.1"
+bimfabrikhh-core = {git = "https://github.com/LGV-BIM-Leitstelle/BIMFabrikHH_core.git", branch = "main"}
+sqlalchemy = "^2.0.44"
+uvicorn = "^0.34.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
+pytest = "^8.4.1"
+pytest-cov = "^6.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 120
+
+[tool.poetry.scripts]
+start-api = "main:main_with_celery"
+start-api-without-celery = "src.api.web_app:main"
+
+[tool.pytest.ini_options]
+# Test discovery
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Output and reporting
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+    "--color=yes",
+    "--durations=10"
+]
+
+# Custom markers
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (slower, with external dependencies)",
+    "slow: Slow tests (performance tests)",
+    "requires_worker: Tests that require a running Celery worker (combines integration + slow)",
+    "tree: Tests for tree model generation",
+    "city: Tests for city model generation",
+    "dgm: Tests for DGM model generation",
+    "celery: Tests for Celery task functionality",
+    "error: Error handling tests"
+]
+
+# Filter warnings
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::UserWarning"
+]
+
+# Minimum version
+minversion = "6.0"

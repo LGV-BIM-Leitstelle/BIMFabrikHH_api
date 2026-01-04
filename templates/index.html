@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BIMFabrikHH API</title>
+    <link rel="icon" type="image/x-icon" href="/static/logo_hamburg.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            /* background: linear-gradient(135deg, #3a4b92 0%, #ffffff 100%); */
+            background-color: #ebebeb;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 900px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 30px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.2em;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        p {
+            margin-bottom: 1em;
+        }
+
+        .links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .link-card {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .link-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .link-card:hover::before {
+            left: 100%;
+        }
+
+        .link-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(52, 152, 219, 0.4);
+        }
+
+        .link-card h3 {
+            margin: 0 0 15px 0;
+            font-size: 1.5em;
+            font-weight: 600;
+        }
+
+        .link-card p {
+            margin: 0;
+            font-size: 1em;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+
+        .link-card.ogc {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .link-card.ogc:hover {
+            box-shadow: 0 15px 30px rgba(231, 76, 60, 0.4);
+        }
+
+        .footer {
+            margin-top: 40px;
+            color: #95a5a6;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .links {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <div class="logo">
+        <img src="/static/logo_hamburg.png" alt="BIMFabrikHH Logo"
+             style="width: 80px; height: 80px; object-fit: contain;">
+    </div>
+
+    <h1>BIMFabrikHH API</h1>
+
+    <p class="subtitle">
+        Willkommen bei der <strong>BIMFabrikHH API</strong> zur automatisierten Erstellung von BIM-Modellen aus den
+        Daten des Geobasiszwillings der Stadt Hamburg.
+    </p>
+
+    <div style="text-align: left;">
+        <p>
+            Im Rahmen des CUT-Projekts <strong>„Connected Urban Twins“</strong> wurde ein webbasiertes
+            Open-Source-Tool entwickelt,
+            das aus Daten des Geobasiszwillings Hamburg automatisiert IFC-Modelle generiert.
+            Nutzerinnen und Nutzer können ein Projektgebiet auf einer Karte auswählen, werden durch Abfragen geführt
+            und erhalten schließlich eine IFC-Datei mit den relevanten Grundlagendaten zum Download.
+        </p>
+        <p>
+            Dieses innovative Verfahren wird durch die BIMFabrikHH bereitgestellt und vom <strong>Landesbetrieb
+            Geoinformation und Vermessung (LGV)</strong> der Stadt Hamburg getragen.
+            Für diese Leistung wurde das Projekt mit dem <strong>BIM-Champion-Award 2025</strong> von buildingSMART
+            in der Kategorie „Technologie/Innovation/Lösungen“ ausgezeichnet.
+        </p>
+        <p>
+            Weitere Informationen finden Sie unter
+            <a href="https://www.hamburg.de/bimfabrikhh-erhaelt-bim-champion-award-2025-1057468"
+               target="_blank">www.hamburg.de</a>
+        </p>
+
+    </div>
+
+    <div class="links">
+        <a href="/data/docs" class="link-card" target="_blank">
+            <h3>Data API</h3>
+            <p>Public API for creating IFC models based on GIS Data. Access comprehensive building information
+                modeling capabilities with RESTful endpoints.</p>
+        </a>
+        <a href="/ogc/docs" class="link-card ogc" target="_blank">
+            <h3>OGC API</h3>
+            <p>OGC API Processes for standardized geospatial workflows. Implement industry-standard protocols for
+                spatial data processing.</p>
+        </a>
+    </div>
+
+    <div class="footer">
+        <p>© 2025 BIMFabrikHH - Landesbetrieb Geoinformation und Vermessung (LGV) der Stadt Hamburg</p>
+    </div>
+</div>
+</body>
