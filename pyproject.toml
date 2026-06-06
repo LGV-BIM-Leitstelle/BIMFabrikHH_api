@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bimfabrikhh-api"
-version = "0.1.0"
+version = "0.2.0"
 description = "BIMFabrikHH API - OGC API Processes for automated IFC model generation"
 authors = ["Ahmed Salem <ahmed.salem@gv.hamburg.de>"]
 license = "MIT"
@@ -24,12 +24,13 @@ fastapi = "^0.115.8"
 requests = "^2.32.3"
 celery = "^5.5.3"
 python-dotenv = "^1.1.1"
-bimfabrikhh-core = {git = "https://github.com/LGV-BIM-Leitstelle/BIMFabrikHH_core.git", branch = "main"}
+bimfabrikhh-core = "^0.2.0"
 sqlalchemy = "^2.0.44"
 uvicorn = "^0.34.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
+httpx = "^0.28.0"
 pytest = "^8.4.1"
 pytest-cov = "^6.0.0"
 
@@ -71,7 +72,8 @@ markers = [
     "city: Tests for city model generation",
     "dgm: Tests for DGM model generation",
     "celery: Tests for Celery task functionality",
-    "error: Error handling tests"
+    "error: Error handling tests",
+    "external_api: Live integration tests against Hamburg OGC API URLs from .env"
 ]
 
 # Filter warnings
