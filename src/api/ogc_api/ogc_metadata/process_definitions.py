@@ -51,7 +51,8 @@ def create_ifc_process_definition(
 content_get_process_generate_tree_model = create_ifc_process_definition(
     "generate-tree-model",
     "Generate BIM tree models as IFC",
-    "Creates BIM models of trees within a given bounding box and exports them as an IFC file",
+    "Creates BIM models of trees within a given bounding box and exports them as an IFC file. "
+    "Set use_dgm_elevation=true to assign ground elevation from DGM GeoTIFF tiles (off by default).",
 )
 
 content_get_process_generate_city_model = create_ifc_process_definition(

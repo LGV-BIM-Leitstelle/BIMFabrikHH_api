@@ -93,16 +93,19 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         # Process data using core package
         self.update_state(state="PROGRESS", meta={"percent": 75})
 
-        # Fetch specific GeoTIFF files based on coordinates (same as DGM app)
-        tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
-        if not tif_filenames:
-            logger.warning("No terrain data found for the specified bounding box - proceeding without elevation data")
-            tif_path = None
+        tif_path = None
+        if request_params.use_dgm_elevation:
+            tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
+            if not tif_filenames:
+                logger.warning(
+                    "No terrain data found for the specified bounding box - proceeding without elevation data"
+                )
+            else:
+                dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
+                tif_path = f"{dgm_url}/{tif_filenames[0]}"
+                logger.info(f"Using GeoTIFF URL for elevation (in-memory processing): {tif_path}")
         else:
-            # Use URL directly - core library supports in-memory processing from URLs
-            dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
-            tif_path = f"{dgm_url}/{tif_filenames[0]}"
-            logger.info(f"Using GeoTIFF URL for elevation (in-memory processing): {tif_path}")
+            logger.info("Skipping DGM elevation enrichment (use_dgm_elevation=false)")
 
         # Generate output path for API's output folder
         filename = f"Baeume_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
