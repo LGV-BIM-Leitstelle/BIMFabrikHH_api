@@ -15,13 +15,23 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from BIMFabrikHH_core.apps.city.app import CityModularApp
-from BIMFabrikHH_core.apps.terrain.filtered.app import process_terrain_folder_to_ifc
-from BIMFabrikHH_core.apps.trees.basic.app import BaumModeller
-from BIMFabrikHH_core.core.ogc_extractor.ogc_values_extractor import (
-    extract_level_of_geometry,
+from BIMFabrikHH_core import (
+    CityGenericApp,
+    RequestParams,
+    TerrainGenericApp,
+    TreesGenericApp,
 )
-from BIMFabrikHH_core.data_models.params_tree import RequestParams
+from BIMFabrikHH_core.apps.trees import (
+    DEFAULT_OAF_SCHEMA,
+    dataframe_to_records,
+    tree_crown_detail_from_containers,
+)
+from BIMFabrikHH_core.core.data_processing import DataProcessor
+from BIMFabrikHH_core.core.georeferencing import extract_elevation_df_from_geotiff
+from BIMFabrikHH_core.core.ogc_extractor import (
+    extract_level_of_geometry,
+    extract_psets_basepoint,
+)
 
 from ..utils.lod_utils import transform_file_names_for_lod
 from celery import Celery
@@ -33,8 +43,6 @@ from .http_requests import DataFetcher
 # Output folder for generated IFC files
 OUTPUT_FOLDER = Path(api_settings.OUTPUT_FOLDER_PATH)
 
-baum_modeller = BaumModeller()
-terrain_app = None
 logger = logging.getLogger(__name__)
 
 app = Celery("hamburg", broker=CELERY_BROKER_URL, backend=CELERY_BACKEND_URL)
@@ -100,18 +108,44 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         filename = f"Baeume_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
         output_path = OUTPUT_FOLDER / filename
 
-        # Create tree model - saves directly to API's output folder
-        ifc_path = baum_modeller.create_tree_model(
-            raw_tree_data=raw_tree_data, 
-            model_params=request_params, 
-            tif_path=tif_path,
-            output_path=output_path
-        )
-
-        if ifc_path is None:
+        df = DataProcessor.raw_data_to_dataframe(raw_tree_data)
+        if df.empty:
             raise ValueError(
                 "No trees found in the specified bounding box. Please try a different area or check your coordinates."
             )
+
+        schema = DEFAULT_OAF_SCHEMA
+        if tif_path:
+            try:
+                df = extract_elevation_df_from_geotiff(
+                    df,
+                    tif_path,
+                    schema.easting,
+                    schema.northing,
+                    schema.elevation,
+                )
+            except Exception as exc:
+                logger.warning("DGM elevation enrichment failed: %s", exc)
+
+        records = dataframe_to_records(
+            df,
+            aufnahmedatum=datetime.now().strftime("%Y-%m-%d"),
+            schema=schema,
+            source_name="BIMFabrikHH_api",
+            detail=tree_crown_detail_from_containers(request_params.containers),
+        )
+        if not records:
+            raise ValueError(
+                "No trees found in the specified bounding box. Please try a different area or check your coordinates."
+            )
+
+        basepoint_psets = extract_psets_basepoint(request_params.containers or [])
+        TreesGenericApp.build_ifc(
+            records,
+            output_path=output_path,
+            bbox_wgs84=request_params.bbox_as_wgs84_tuple,
+            basepoint_psets=basepoint_psets if basepoint_psets else None,
+        )
 
         self.update_state(state="PROGRESS", meta={"percent": 100})
 
@@ -181,25 +215,25 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
         if len(gml_files) > 4:
             raise ValueError(
-                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. "
-                "Bitte wählen Sie einen Umring erneut."
+                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. " "Bitte wählen Sie einen Umring erneut."
             )
 
         # Debug: log ALL containers being sent
-        logger.info(f"Received {len(request_params.containers)} containers:")
-        for container in request_params.containers:
+        containers = request_params.containers or []
+        logger.info(f"Received {len(containers)} containers:")
+        for container in containers:
             logger.info(f"  - Container: {container.containerId}")
-        
+
         # Extract LoD from container components using existing core method
         lod_level = extract_level_of_geometry(request_params.containers)
         logger.info(f"Extracted LoD level: {lod_level}")
-        
+
         # Determine LoD folder URL
         if lod_level == 2:
             lod_folder = api_settings.DATA_LOD2_FOLDER
         else:
             lod_folder = api_settings.DATA_LOD1_FOLDER
-        
+
         folder_url = f"{api_settings.DATA_BASE_URL}/{lod_folder}"
         logger.info(f"Using LoD{lod_level} directory: {folder_url}")
 
@@ -209,25 +243,22 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         transformed_gml_files = transform_file_names_for_lod(gml_files, lod_level)
         logger.info(f"Using CityGML tiles: {transformed_gml_files}")
 
-        # Create new city app for each request (tiles vary by bbox)
-        city_app = CityModularApp(transformed_gml_files, folder_url)
-
-        # Use modular app to process data
-        raw_buildings = city_app.get_data_in_bbox(bbox)
-        if not raw_buildings:
-            raise ValueError(
-                "No buildings found in the specified bounding box. "
-                "Please try a different area or check your coordinates."
-            )
-
-        processed_buildings = city_app.process_data(raw_buildings)
-
         # Generate output path for API's output folder
         filename = f"Stadtmodell_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
         output_path = OUTPUT_FOLDER / filename
 
-        # Create IFC using modular app - saves directly to API's output folder
-        ifc_path = city_app.create_ifc(processed_buildings, request_params, output_path=output_path)
+        ifc_path = CityGenericApp.from_gml_files(
+            transformed_gml_files,
+            request_params=request_params,
+            folder_path=folder_url,
+            output_path=output_path,
+        )
+
+        if ifc_path is None:
+            raise ValueError(
+                "No buildings found in the specified bounding box. "
+                "Please try a different area or check your coordinates."
+            )
 
         self.update_state(state="PROGRESS", meta={"percent": 75})
 
@@ -270,7 +301,7 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 @app.task(bind=True)
 def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Execute DGM model generation using filtered terrain app.
+    Execute DGM model generation using the generic terrain app in core.
 
     Args:
         input_data: Input data containing request parameters.
@@ -299,8 +330,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         # Check tile limit
         if len(tif_filenames) > 4:
             raise ValueError(
-                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. "
-                "Bitte wählen Sie einen Umring erneut."
+                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. " "Bitte wählen Sie einen Umring erneut."
             )
 
         # DGM URL
@@ -310,15 +340,14 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         filename = f"DGM_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
         output_path = OUTPUT_FOLDER / filename
 
-        # Process terrain data to IFC (saves directly to output_path and returns bytes)
-        ifc_bytes = process_terrain_folder_to_ifc(
+        ifc_path = TerrainGenericApp.from_geotiffs(
+            tif_filenames,
+            request_params=request_params,
             folder_path=dgm_url,
-            tif_files=tif_filenames,
-            input_data=request_params,
             output_path=output_path,
         )
 
-        if ifc_bytes is None:
+        if ifc_path is None:
             raise ValueError("Failed to generate IFC data from terrain")
 
         # Generate URLs

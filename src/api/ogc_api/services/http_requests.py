@@ -209,6 +209,28 @@ class DataFetcher:
         return HamburgOGCAPI.fetch_data(url, params)
 
     @staticmethod
+    def fetch_tree_data_hafen(bbox: Dict[str, float]) -> Dict[str, Any]:
+        """
+        Fetch harbor tree data from OAF API.
+
+        Args:
+            bbox: Bounding box parameters
+
+        Returns:
+            Raw harbor tree data from API
+        """
+        params = {
+            "f": "json",
+            "bbox": f"{bbox['min_x']},{bbox['min_y']},{bbox['max_x']},{bbox['max_y']}",
+            "crs": HamburgOGCAPI.DEFAULT_CRS,
+            "limit": HamburgOGCAPI.DEFAULT_LIMIT,
+            "skipGeometry": "false",
+        }
+
+        url = str(api_settings.TREES_HAFEN_API_URL)
+        return HamburgOGCAPI.fetch_data(url, params)
+
+    @staticmethod
     def fetch_citymodel_tiles(bbox: Dict[str, float]) -> List[str]:
         """
         Fetch city model tile information.

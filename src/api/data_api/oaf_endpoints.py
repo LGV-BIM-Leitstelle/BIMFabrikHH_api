@@ -11,7 +11,6 @@ BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
 import logging
 from typing import List
 
-from BIMFabrikHH_core.apps.trees.basic.app import BaumModeller
 from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
@@ -19,8 +18,6 @@ from fastapi.responses import JSONResponse
 from ..ogc_api.services.http_requests import DataFetcher
 
 router = APIRouter()
-
-baum_modeller = BaumModeller()
 
 LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +58,45 @@ def get_oaf_trees(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
         LOGGER.error("An error occurred: %s" % e)
         raise HTTPException(
             status_code=500, detail=f"Error fetching tree data: {str(e)}"
+        )
+
+
+@router.get(
+    "/bimfabrikhh-datasets/oaf-trees-hafen",
+    response_class=Response,
+    tags=["Strassenbaumkataster Hamburg Hafen"],
+    description="Get harbor trees from OGC API Features Hamburg",
+)
+def get_oaf_trees_hafen(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+    """
+    Retrieve harbor tree data from Hamburg's OGC API Features service.
+
+    Args:
+        bbox: Bounding box parameters defining the area of interest.
+
+    Returns:
+        JSONResponse: Harbor tree data within the specified bounding box.
+
+    Raises:
+        HTTPException: If there's an error fetching harbor tree data.
+    """
+    try:
+        # Convert bbox to dict format for DataFetcher
+        bbox_dict = {
+            "min_x": bbox.min_x,
+            "min_y": bbox.min_y,
+            "max_x": bbox.max_x,
+            "max_y": bbox.max_y,
+        }
+
+        # Fetch raw harbor tree data using API package
+        trees_data: dict = DataFetcher.fetch_tree_data_hafen(bbox_dict)
+
+        return JSONResponse(content=trees_data)
+    except Exception as e:
+        LOGGER.error("An error occurred: %s" % e)
+        raise HTTPException(
+            status_code=500, detail=f"Error fetching harbor tree data: {str(e)}"
         )
 
 

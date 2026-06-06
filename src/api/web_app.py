@@ -156,3 +156,7 @@ def main() -> None:
 
     app = create_app()
     uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+    main()

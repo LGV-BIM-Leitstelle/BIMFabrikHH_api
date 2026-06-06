@@ -28,6 +28,9 @@ class APISettings(BaseSettings):
     # Tree API (baum app)
     TREES_API_URL: HttpUrl
 
+    # Tree API Hafen (harbor trees)
+    TREES_HAFEN_API_URL: HttpUrl
+
     # DGM API (dgm app)
     DGM_TILES_API_URL: HttpUrl
 
