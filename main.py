@@ -6,6 +6,7 @@ Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation un
 BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
 """
 
+import argparse
 import os
 import signal
 import subprocess
@@ -13,8 +14,6 @@ import sys
 import threading
 import time
 from typing import Any
-
-from src.api.web_app import main
 
 
 class CeleryWorkerManager:
@@ -129,6 +128,19 @@ class CeleryWorkerManager:
                 self.output_thread.join(timeout=1)
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run API + Celery stack")
+
+    parser.add_argument(
+        "--db",
+        choices=["sqlite", "redis"],
+        default="sqlite",
+        help="Backend/Broker database type (sqlite for testing, redis for production)",
+    )
+
+    return parser.parse_args()
+
+
 def signal_handler(_signum: int, _frame: Any) -> None:
     """
     Handle shutdown signals.
@@ -143,11 +155,16 @@ def signal_handler(_signum: int, _frame: Any) -> None:
     sys.exit(0)
 
 
-def main_with_celery() -> None:
+def main_with_celery(db_type: str) -> None:
     """
     Main function that starts both Celery worker and FastAPI app.
     """
     """Main function that starts both Celery worker and FastAPI app"""
+
+    # Set Backend/Broker
+    os.environ["BACKEND_DB"] = db_type
+
+    from src.api.web_app import main
 
     # Create worker manager
     worker_manager = CeleryWorkerManager()
@@ -184,4 +201,5 @@ def main_with_celery() -> None:
 
 
 if __name__ == "__main__":
-    main_with_celery()
+    args = parse_args()
+    main_with_celery(db_type=args.db)
