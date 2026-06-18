@@ -134,7 +134,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--db",
         choices=["sqlite", "redis"],
-        default="sqlite",
+        default=os.getenv("BACKEND_DB", "sqlite"),
         help="Backend/Broker database type (sqlite for testing, redis for production)",
     )
 

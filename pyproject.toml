@@ -2,7 +2,10 @@
 name = "bimfabrikhh-api"
 version = "0.2.0"
 description = "BIMFabrikHH API - OGC API Processes for automated IFC model generation"
-authors = ["Ahmed Salem <ahmed.salem@gv.hamburg.de>"]
+authors = [
+    "Ahmed Salem <ahmed.salem@gv.hamburg.de>", 
+    "Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>"
+]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/LGV-BIM-Leitstelle/BIMFabrikHH_api"
