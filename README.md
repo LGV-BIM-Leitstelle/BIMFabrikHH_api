@@ -231,7 +231,7 @@ podman run -d \
   ghcr.io/lgv-bim-leitstelle/bimfabrikhh_api:latest \
   --db redis
 
-# logs
+# View logs
 podman logs -f bimfabrikhh-api
 podman logs -f redis-backend
 
