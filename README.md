@@ -217,6 +217,28 @@ docker stop bimfabrikhh-api
 docker start bimfabrikhh-api
 ```
 
+**Run container with redis backend and broker via podman**
+```bash
+# Set up pod
+podman pod create --name bimfabrikhh-pod -p 6379:6379 -p 8083:8083
+podman run -d --pod bimfabrikhh-pod --name redis-backend redis:7
+podman run -d \
+  --pod bimfabrikhh-pod \
+  --name bimfabrikhh-api \
+  -v /path/to/output:/app/output \
+  --restart unless-stopped \
+  --env-file .env \
+  ghcr.io/lgv-bim-leitstelle/bimfabrikhh_api:latest \
+  --db redis
+
+# logs
+podman logs -f bimfabrikhh-api
+podman logs -f redis-backend
+
+# stop the pod
+podman pod stop bimfabrikhh-pod
+```
+
 ### Configuration
 
 Settings are configured via environment variables. In Docker, these are baked into the image from `env.example`.
