@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 
 from pydantic import HttpUrl
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,13 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 class APISettings(BaseSettings):
     """API configuration settings with environment variable support."""
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     # Base Configuration
     BASE_URL: HttpUrl
@@ -52,14 +59,11 @@ class APISettings(BaseSettings):
     DATA_LOD2_FOLDER: str
     DATA_DGM_FOLDER: str
 
-    class Config:
-        env_file = str(PROJECT_ROOT / ".env")
-        env_file_encoding = "utf-8"
-        case_sensitive = False  # Allow case-insensitive environment variables
-
 
 # Global settings instance
 try:
     api_settings = APISettings()  # noqa
 except Exception as e:
-    raise RuntimeError(f"Failed to load settings: {e}. Make sure .env file exists and contains all required variables.")
+    raise RuntimeError(
+        f"Failed to load settings: {e}. Make sure .env file exists and contains all required variables."
+    )

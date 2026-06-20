@@ -2,7 +2,10 @@
 name = "bimfabrikhh-api"
 version = "0.2.0"
 description = "BIMFabrikHH API - OGC API Processes for automated IFC model generation"
-authors = ["Ahmed Salem <ahmed.salem@gv.hamburg.de>"]
+authors = [
+    "Ahmed Salem <ahmed.salem@gv.hamburg.de>", 
+    "Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>"
+]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/LGV-BIM-Leitstelle/BIMFabrikHH_api"
@@ -22,17 +25,19 @@ package-mode = false
 python = ">=3.11,<3.12"
 fastapi = "^0.115.8"
 requests = "^2.32.3"
-celery = "^5.5.3"
+celery = {extras = ["redis"], version = "^5.6.3"}
 python-dotenv = "^1.1.1"
 bimfabrikhh-core = "^0.2.0"
 sqlalchemy = "^2.0.44"
 uvicorn = "^0.34.0"
+redis = "^5.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
 httpx = "^0.28.0"
 pytest = "^8.4.1"
 pytest-cov = "^6.0.0"
+ipykernel = "*"
 
 [build-system]
 requires = ["poetry-core"]

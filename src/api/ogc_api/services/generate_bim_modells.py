@@ -10,10 +10,10 @@ Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation un
 BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
 """
 
-from typing import Any, Dict
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict
 
 from BIMFabrikHH_core import (
     CityGenericApp,
@@ -32,12 +32,12 @@ from BIMFabrikHH_core.core.ogc_extractor import (
     extract_level_of_geometry,
     extract_psets_basepoint,
 )
-
-from ..utils.lod_utils import transform_file_names_for_lod
 from celery import Celery
 
-from src.database import CELERY_BACKEND_URL, CELERY_BROKER_URL
 from src.api.config.settings import api_settings
+from src.database import get_celery_config
+
+from ..utils.lod_utils import transform_file_names_for_lod
 from .http_requests import DataFetcher
 
 # Output folder for generated IFC files
@@ -45,7 +45,10 @@ OUTPUT_FOLDER = Path(api_settings.OUTPUT_FOLDER_PATH)
 
 logger = logging.getLogger(__name__)
 
-app = Celery("hamburg", broker=CELERY_BROKER_URL, backend=CELERY_BACKEND_URL)
+celery_config = get_celery_config()
+app = Celery(
+    "hamburg", broker=celery_config.broker_url, backend=celery_config.backend_url
+)
 
 
 @app.task(bind=True)
@@ -103,12 +106,16 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             else:
                 dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
                 tif_path = f"{dgm_url}/{tif_filenames[0]}"
-                logger.info(f"Using GeoTIFF URL for elevation (in-memory processing): {tif_path}")
+                logger.info(
+                    f"Using GeoTIFF URL for elevation (in-memory processing): {tif_path}"
+                )
         else:
             logger.info("Skipping DGM elevation enrichment (use_dgm_elevation=false)")
 
         # Generate output path for API's output folder
-        filename = f"Baeume_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        filename = (
+            f"Baeume_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        )
         output_path = OUTPUT_FOLDER / filename
 
         df = DataProcessor.raw_data_to_dataframe(raw_tree_data)
@@ -218,7 +225,8 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
         if len(gml_files) > 4:
             raise ValueError(
-                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. " "Bitte wählen Sie einen Umring erneut."
+                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. "
+                "Bitte wählen Sie einen Umring erneut."
             )
 
         # Debug: log ALL containers being sent
@@ -328,19 +336,24 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         # Fetch tile information using API package
         tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
         if not tif_filenames:
-            raise FileNotFoundError("No terrain data found for the specified bounding box")
+            raise FileNotFoundError(
+                "No terrain data found for the specified bounding box"
+            )
 
         # Check tile limit
         if len(tif_filenames) > 4:
             raise ValueError(
-                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. " "Bitte wählen Sie einen Umring erneut."
+                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. "
+                "Bitte wählen Sie einen Umring erneut."
             )
 
         # DGM URL
         dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
 
         # Generate output path
-        filename = f"DGM_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        filename = (
+            f"DGM_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        )
         output_path = OUTPUT_FOLDER / filename
 
         ifc_path = TerrainGenericApp.from_geotiffs(

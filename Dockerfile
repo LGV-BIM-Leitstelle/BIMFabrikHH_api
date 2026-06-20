@@ -56,6 +56,10 @@ RUN --mount=type=secret,id=github_token \
 # ---- Final stage ----
 FROM base AS final
 
+ENV REDIS_HOST=redis \
+    REDIS_PORT=6379 \
+    REDIS_DB=0
+
 WORKDIR /app
 
 # Copy installed packages and source code from builder
@@ -72,5 +76,6 @@ RUN chmod +x /app/main.py
 EXPOSE 8083
 
 # Set the default command 
-CMD ["python", "main.py"]
+ENTRYPOINT ["python", "main.py"]
+CMD []
 

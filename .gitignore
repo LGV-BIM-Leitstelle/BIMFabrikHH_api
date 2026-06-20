@@ -25,6 +25,7 @@ env/
 ENV/
 *.egg-info/
 .pytest_cache/
+poetry.lock
 
 # IFC files
 *.ifc
@@ -47,5 +48,4 @@ Thumbs.db
 
 /deploy/
 /examples/
-/tests/
 /templates/
