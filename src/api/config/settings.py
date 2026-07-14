@@ -4,6 +4,7 @@ Uses environment variables with fallback to defaults.
 """
 
 import logging
+import os
 from pathlib import Path
 
 from pydantic import HttpUrl
@@ -13,6 +14,20 @@ logger = logging.getLogger(__name__)
 
 # Get project root directory (3 levels up from this file)
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+
+
+def admission_control_enabled() -> bool:
+    """Return whether application-level admission control is active.
+
+    Admission control (Redis-backed rate limiting and concurrent-job limiting)
+    is only enabled in production mode, i.e. when the Redis backend is selected
+    via ``--db redis`` (which sets ``BACKEND_DB=redis``). For the sqlite backend
+    used in local/testing runs it is disabled.
+
+    Evaluated at call time so it reflects the ``BACKEND_DB`` value set by the
+    application launcher at runtime.
+    """
+    return os.getenv("BACKEND_DB", "sqlite").lower() == "redis"
 
 
 class APISettings(BaseSettings):
@@ -60,16 +75,17 @@ class APISettings(BaseSettings):
     DATA_DGM_FOLDER: str
 
     # Redis configuration (used for admission control: rate limiting and concurrency)
-    REDIS_HOST: str
-    REDIS_PORT: int
-    REDIS_DB: int
+    # Optional so that the sqlite/local backend runs without Redis configured.
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
 
     # Admission control - rate limiting
-    RATE_LIMIT_TIMES: int
-    RATE_LIMIT_SECONDS: int
+    RATE_LIMIT_TIMES: int = 5
+    RATE_LIMIT_SECONDS: int = 60
 
     # Admission control - concurrent jobs per client identifier
-    MAX_CONCURRENT_JOBS: int
+    MAX_CONCURRENT_JOBS: int = 2
 
     @property
     def redis_url(self) -> str:

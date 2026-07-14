@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
+from .config.settings import admission_control_enabled
 from .data_api.oaf_endpoints import router as oaf_router
 from .ogc_api.ogc_metadata.app_info import (
     app_contact,
@@ -73,12 +74,22 @@ def create_app() -> FastAPI:
     # Lifespan context manager for rate limiter
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        """Manage startup and shutdown of the rate limiter."""
+        """Manage startup and shutdown of the rate limiter.
+
+        The Redis-backed rate limiter is only initialized in production mode
+        (``--db redis``); for the sqlite/local backend it is skipped and the
+        rate limit dependency self-disables.
+        """
         # --- startup ---
-        try:
-            await init_rate_limiter()
-        except Exception as e:  # pragma: no cover - defensive startup logging
-            print(f"Error initializing rate limiter: {e}")
+        if admission_control_enabled():
+            try:
+                await init_rate_limiter()
+            except Exception as e:  # pragma: no cover - defensive startup logging
+                print(f"Error initializing rate limiter: {e}")
+        else:
+            print(
+                "Admission control disabled (sqlite backend); skipping rate limiter init"
+            )
 
         yield
 

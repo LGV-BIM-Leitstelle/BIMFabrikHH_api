@@ -15,7 +15,7 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from src.api.config.settings import api_settings
+from src.api.config.settings import admission_control_enabled, api_settings
 from src.api.ogc_api.ogc_metadata.dict_conformance import content_conformance
 from src.api.ogc_api.ogc_metadata.dict_landing_page import content_landing_page
 from src.api.ogc_api.ogc_metadata.dict_processes import content_get_processes
@@ -197,9 +197,12 @@ def execute_process(
     client_id = get_client_identifier(request)
 
     # Ask the admission controller whether a new job may be accepted
-    # (raises HTTP 429 if the concurrent-job limit is reached).
-    admission = get_admission_controller()
-    admission.ensure_capacity(client_id)
+    # (raises HTTP 429 if the concurrent-job limit is reached). Admission
+    # control only runs in production mode (Redis backend); it is skipped for
+    # the sqlite/local backend.
+    admission = get_admission_controller() if admission_control_enabled() else None
+    if admission is not None:
+        admission.ensure_capacity(client_id)
 
     # Submit task to Celery
     if processID == "generate-tree-model":
@@ -215,7 +218,8 @@ def execute_process(
 
     # Register the submitted task with the admission controller so the
     # concurrency slot is tracked until a Celery lifecycle hook releases it.
-    admission.register_job(client_id, jobId)
+    if admission is not None:
+        admission.register_job(client_id, jobId)
 
     # Get base URL from settings
     base_url = str(api_settings.BASE_URL).rstrip("/")

@@ -56,10 +56,16 @@ app = Celery(
 def _release_admission_slot(task_id: str) -> None:
     """Release the admission-control concurrency slot for a finished task.
 
+    No-op unless admission control is enabled (production/Redis backend).
     Imported lazily so the worker does not require the admission controller (and
     its Redis client) until a task actually completes.
     """
     if not task_id:
+        return
+
+    from src.api.config.settings import admission_control_enabled
+
+    if not admission_control_enabled():
         return
     try:
         from .admission_controller import get_admission_controller
