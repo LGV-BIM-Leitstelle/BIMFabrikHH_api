@@ -6,10 +6,12 @@ combining both data API and OGC API services. It sets up the application
 with proper middleware, routing, and static file serving.
 
 Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung
-BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
+BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>, Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>
 """
 
 import os
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -24,6 +26,7 @@ from .ogc_api.ogc_metadata.app_info import (
     app_ogc_description,
 )
 from .ogc_api.routes.main_ogc import router_ogc
+from .ogc_api.services.rate_limit import close_rate_limiter, init_rate_limiter
 
 
 def create_app() -> FastAPI:
@@ -40,7 +43,9 @@ def create_app() -> FastAPI:
         RuntimeError: If required directories (output, static) do not exist.
     """
     # Data API
-    data_app = FastAPI(title="BIMFabrikHH API", description=app_data_description, version="0.1.0")
+    data_app = FastAPI(
+        title="BIMFabrikHH API", description=app_data_description, version="0.1.0"
+    )
 
     # OGC API Processes
     ogc_app = FastAPI(
@@ -65,10 +70,29 @@ def create_app() -> FastAPI:
     data_app.include_router(oaf_router)
     ogc_app.include_router(router_ogc)
 
+    # Lifespan context manager for rate limiter
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        """Manage startup and shutdown of the rate limiter."""
+        # --- startup ---
+        try:
+            await init_rate_limiter()
+        except Exception as e:  # pragma: no cover - defensive startup logging
+            print(f"Error initializing rate limiter: {e}")
+
+        yield
+
+        # --- shutdown ---
+        try:
+            await close_rate_limiter()
+        except Exception as e:  # pragma: no cover - defensive shutdown logging
+            print(f"Error closing rate limiter: {e}")
+
     # Static files setup for OGC app
-    from .config.settings import api_settings
     from pathlib import Path
-    
+
+    from .config.settings import api_settings
+
     # Get project root directory (this file is in src/api/)
     project_root = Path(__file__).parent.parent.parent
     output_dir = project_root / api_settings.OUTPUT_FOLDER_PATH
@@ -87,6 +111,7 @@ def create_app() -> FastAPI:
         title="BIMFabrikHH API",
         description="Combined API with Data and OGC services",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     # Add CORS to main app
@@ -139,12 +164,13 @@ def main() -> None:
     by the main application launcher.
     """
     import uvicorn
+
     from .config.settings import api_settings
 
     # Get configuration from settings (which loads from .env)
     port = int(api_settings.API_PORT)
     host = api_settings.API_HOST
-    
+
     # Override host for Docker containers
     if os.getenv("DOCKER_CONTAINER", "false").lower() == "true":
         host = "0.0.0.0"

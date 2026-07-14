@@ -12,9 +12,10 @@ import datetime
 
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery.result import AsyncResult
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from src.api.config.settings import api_settings
 from src.api.ogc_api.ogc_metadata.dict_conformance import content_conformance
 from src.api.ogc_api.ogc_metadata.dict_landing_page import content_landing_page
 from src.api.ogc_api.ogc_metadata.dict_processes import content_get_processes
@@ -23,13 +24,15 @@ from src.api.ogc_api.ogc_metadata.process_definitions import (
     content_get_process_generate_dgm_model,
     content_get_process_generate_tree_model,
 )
+from src.api.ogc_api.services.admission_controller import get_admission_controller
+from src.api.ogc_api.services.client_identity import get_client_identifier
 from src.api.ogc_api.services.generate_bim_modells import (
     app,
     execute_generate_city_model,
     execute_generate_dgm_model,
     execute_generate_tree_model,
 )
-from src.api.config.settings import api_settings
+from src.api.ogc_api.services.rate_limit import execution_rate_limit
 
 router_ogc = APIRouter()
 
@@ -157,27 +160,46 @@ def get_jobs() -> JSONResponse:
     status_code=201,
     summary="Execute Process",
     description="Executes a specified process with provided input parameters and creates a job.",
+    dependencies=[Depends(execution_rate_limit)],
 )
 def execute_process(
-    processID: str, inputs: RequestParams = Body(..., embed=True)
+    processID: str,
+    request: Request,
+    inputs: RequestParams = Body(..., embed=True),
 ) -> JSONResponse:
     """
     Execute a specified OGC process with provided input parameters.
 
+    Admission control is enforced in two stages: a per-client rate limit
+    (handled by the ``execution_rate_limit`` dependency) and a per-client
+    concurrent-job limit (handled by the admission controller). The router only
+    resolves the client identifier, asks the admission controller for capacity,
+    submits the Celery task, and registers it.
+
     Args:
         processID: Identifier of the process to execute.
+        request: The incoming request, used to resolve the client identifier.
         inputs: Input parameters for the process.
 
     Returns:
         JSONResponse: Job information including ID and status.
 
     Raises:
-        HTTPException: If the process is not found.
+        HTTPException: 404 if the process is not found, 429 if the client's
+            concurrent-job limit has been reached.
     """
     # Check if we have a model for this process
     input_model_cls = PROCESS_INPUT_MODELS.get(processID)
     if not input_model_cls:
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")
+
+    # Determine the client identifier.
+    client_id = get_client_identifier(request)
+
+    # Ask the admission controller whether a new job may be accepted
+    # (raises HTTP 429 if the concurrent-job limit is reached).
+    admission = get_admission_controller()
+    admission.ensure_capacity(client_id)
 
     # Submit task to Celery
     if processID == "generate-tree-model":
@@ -190,9 +212,13 @@ def execute_process(
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")
 
     jobId = task.id
-    
+
+    # Register the submitted task with the admission controller so the
+    # concurrency slot is tracked until a Celery lifecycle hook releases it.
+    admission.register_job(client_id, jobId)
+
     # Get base URL from settings
-    base_url = str(api_settings.BASE_URL).rstrip('/')
+    base_url = str(api_settings.BASE_URL).rstrip("/")
 
     return JSONResponse(
         status_code=201,

@@ -59,6 +59,26 @@ class APISettings(BaseSettings):
     DATA_LOD2_FOLDER: str
     DATA_DGM_FOLDER: str
 
+    # Redis configuration (used for admission control: rate limiting and concurrency)
+    REDIS_HOST: str
+    REDIS_PORT: int
+    REDIS_DB: int
+
+    # Admission control - rate limiting
+    RATE_LIMIT_TIMES: int
+    RATE_LIMIT_SECONDS: int
+
+    # Admission control - concurrent jobs per client identifier
+    MAX_CONCURRENT_JOBS: int
+
+    @property
+    def redis_url(self) -> str:
+        """Return the Redis connection URL used for admission control.
+
+        Built from the individual host/port/db settings.
+        """
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
 
 # Global settings instance
 try:

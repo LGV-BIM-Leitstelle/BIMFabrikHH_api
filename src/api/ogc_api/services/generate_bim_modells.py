@@ -7,7 +7,7 @@ This module provides Celery tasks for generating different types of BIM models:
 - Digital terrain models (DGM) from GeoTIFF data
 
 Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung
-BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
+BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>, Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>
 """
 
 import logging
@@ -34,6 +34,7 @@ from BIMFabrikHH_core.core.ogc_extractor import (
 )
 from celery import Celery, states
 from celery.exceptions import Ignore
+from celery.signals import task_postrun, task_revoked
 
 from src.api.config.settings import api_settings
 from src.database import get_celery_config
@@ -50,6 +51,35 @@ celery_config = get_celery_config()
 app = Celery(
     "hamburg", broker=celery_config.broker_url, backend=celery_config.backend_url
 )
+
+
+def _release_admission_slot(task_id: str) -> None:
+    """Release the admission-control concurrency slot for a finished task.
+
+    Imported lazily so the worker does not require the admission controller (and
+    its Redis client) until a task actually completes.
+    """
+    if not task_id:
+        return
+    try:
+        from .admission_controller import get_admission_controller
+
+        get_admission_controller().release_job(task_id)
+    except Exception as e:  # pragma: no cover - cleanup must never crash the worker
+        logger.warning("Failed to release admission slot for task %s: %s", task_id, e)
+
+
+@task_postrun.connect
+def _on_task_postrun(task_id: str = None, **kwargs: Any) -> None:
+    """Release the concurrency slot after a task succeeds or fails."""
+    _release_admission_slot(task_id)
+
+
+@task_revoked.connect
+def _on_task_revoked(request: Any = None, **kwargs: Any) -> None:
+    """Release the concurrency slot when a task is revoked/dismissed."""
+    task_id = getattr(request, "id", None) if request is not None else None
+    _release_admission_slot(task_id)
 
 
 @app.task(bind=True)
