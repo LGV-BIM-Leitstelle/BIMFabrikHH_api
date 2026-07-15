@@ -1,22 +1,27 @@
 """
 Tests for tree model generation functionality.
 
-NOTE: These tests use .delay() which requires a running Celery worker.
-Skip with: pytest -m "not requires_worker"
+Tasks run in Celery eager mode (see the ``celery_eager_mode`` fixture in
+conftest.py), so ``.delay()``/``.get()`` execute in-process without a running
+worker or broker. Heavy core dependencies are mocked.
 """
 
 from unittest.mock import Mock, patch
 
 import pytest
 from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
-from BIMFabrikHH_core.data_models.params_tree import (Component, Container,
-                                                      RequestParams)
+from BIMFabrikHH_core.data_models.params_tree import Component, Container, RequestParams
 
-from src.api.ogc_api.services.generate_bim_modells import \
-    execute_generate_tree_model
+from src.api.ogc_api.services.generate_bim_modells import execute_generate_tree_model
 
-# Mark all tests in this file as integration tests requiring Celery workers
-pytestmark = [pytest.mark.integration, pytest.mark.requires_worker, pytest.mark.slow]
+# Integration-style tests that exercise the full task in eager mode.
+pytestmark = [pytest.mark.integration, pytest.mark.celery, pytest.mark.tree]
+
+
+@pytest.fixture(autouse=True)
+def _enable_eager(celery_eager_mode):
+    """Run all tasks in this module eagerly (no worker/broker required)."""
+    yield
 
 
 @pytest.fixture
@@ -68,54 +73,52 @@ class TestTreeModelGeneration:
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
         ) as mock_fetcher_class, patch(
-            "src.api.ogc_api.services.generate_bim_modells.baum_modeller"
-        ) as mock_baum, patch(
-            "src.api.ogc_api.services.generate_bim_modells.save_ifc_file_on_server"
-        ) as mock_save:
+            "src.api.ogc_api.services.generate_bim_modells.DataProcessor"
+        ) as mock_processor, patch(
+            "src.api.ogc_api.services.generate_bim_modells.dataframe_to_records"
+        ) as mock_to_records, patch(
+            "src.api.ogc_api.services.generate_bim_modells.tree_crown_detail_from_containers"
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.extract_psets_basepoint"
+        ) as mock_psets, patch(
+            "src.api.ogc_api.services.generate_bim_modells.TreesGenericApp"
+        ) as mock_app:
 
             # Mock dependencies
-            mock_fetcher = Mock()
-            mock_fetcher.fetch_tree_data.return_value = sample_tree_data
-            mock_fetcher_class.return_value = mock_fetcher
+            mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
+            mock_processor.raw_data_to_dataframe.return_value = Mock(empty=False)
+            mock_to_records.return_value = [{"tree": "record"}]
+            mock_psets.return_value = []
 
-            mock_baum.create_tree_model.return_value = "/path/to/tree_model.ifc"
-            mock_save.return_value = (
-                "tree_model.ifc",
-                "http://example.com/tree_model.ifc",
-                "https://example.com/tree_model.ifc",
-            )
-
-            # Execute task using the correct pattern
+            # Execute task (runs eagerly in-process)
             task = execute_generate_tree_model.delay(valid_request_params.model_dump())
             result = task.get(timeout=10)
 
-            # Verify result structure
+            # Verify the IFC build was invoked and the result structure is correct
+            mock_app.build_ifc.assert_called_once()
             assert "model" in result
             assert result["model"]["filename"].startswith("Baeume_")
             assert result["model"]["content_type"] == "application/x-step"
             assert "url-http" in result["model"]
             assert "url-https" in result["model"]
 
-    def test_tree_model_no_file_path(self, valid_request_params, sample_tree_data):
-        """Test tree model generation when no file path is returned."""
+    def test_tree_model_no_trees_found(self, valid_request_params, sample_tree_data):
+        """Test tree model generation when no trees are found in the bounding box."""
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
         ) as mock_fetcher_class, patch(
-            "src.api.ogc_api.services.generate_bim_modells.baum_modeller"
-        ) as mock_baum:
+            "src.api.ogc_api.services.generate_bim_modells.DataProcessor"
+        ) as mock_processor:
 
-            # Mock dependencies
-            mock_fetcher = Mock()
-            mock_fetcher.fetch_tree_data.return_value = sample_tree_data
-            mock_fetcher_class.return_value = mock_fetcher
+            # Data is fetched but the resulting dataframe is empty
+            mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
+            mock_processor.raw_data_to_dataframe.return_value = Mock(empty=True)
 
-            mock_baum.create_tree_model.return_value = None
-
-            # Execute task and expect failure
-            task = execute_generate_tree_model.delay(valid_request_params.model_dump())
-            with pytest.raises(
-                ValueError, match="Tree model generation returned no file path"
-            ):
+            # Execute task and expect a ValueError about no trees
+            with pytest.raises(ValueError, match="No trees found"):
+                task = execute_generate_tree_model.delay(
+                    valid_request_params.model_dump()
+                )
                 task.get(timeout=10)
 
     def test_tree_model_exception_handling(self, valid_request_params):
@@ -124,13 +127,13 @@ class TestTreeModelGeneration:
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
         ) as mock_fetcher_class:
             # Mock dependency to raise exception
-            mock_fetcher = Mock()
-            mock_fetcher.fetch_tree_data.side_effect = Exception("Network error")
-            mock_fetcher_class.return_value = mock_fetcher
+            mock_fetcher_class.fetch_tree_data.side_effect = Exception("Network error")
 
             # Execute task and expect failure
-            task = execute_generate_tree_model.delay(valid_request_params.model_dump())
             with pytest.raises(Exception, match="Network error"):
+                task = execute_generate_tree_model.delay(
+                    valid_request_params.model_dump()
+                )
                 task.get(timeout=10)
 
     @pytest.mark.parametrize(
@@ -144,8 +147,8 @@ class TestTreeModelGeneration:
     )
     def test_tree_model_invalid_input(self, invalid_input):
         """Test tree model generation with invalid input data."""
-        task = execute_generate_tree_model.delay(invalid_input)
         with pytest.raises(Exception):
+            task = execute_generate_tree_model.delay(invalid_input)
             task.get(timeout=10)
 
 
@@ -157,33 +160,35 @@ class TestTreeModelIntegration:
         """Integration test for tree model generation with mocked external dependencies."""
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
-        ) as mock_fetcher, patch(
-            "src.api.ogc_api.services.generate_bim_modells.baum_modeller"
-        ) as mock_baum, patch(
-            "src.api.ogc_api.services.generate_bim_modells.save_ifc_file_on_server"
-        ) as mock_save:
+        ) as mock_fetcher_class, patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataProcessor"
+        ) as mock_processor, patch(
+            "src.api.ogc_api.services.generate_bim_modells.dataframe_to_records"
+        ) as mock_to_records, patch(
+            "src.api.ogc_api.services.generate_bim_modells.tree_crown_detail_from_containers"
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.extract_psets_basepoint"
+        ) as mock_psets, patch(
+            "src.api.ogc_api.services.generate_bim_modells.TreesGenericApp"
+        ) as mock_app:
 
             # Mock external dependencies
-            mock_fetcher.fetch_tree_data.return_value = sample_tree_data
-            mock_baum.create_tree_model.return_value = "/tmp/test_tree_model.ifc"
-            mock_save.return_value = (
-                "test_tree.ifc",
-                "http://localhost/test_tree.ifc",
-                "https://localhost/test_tree.ifc",
-            )
+            mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
+            mock_processor.raw_data_to_dataframe.return_value = Mock(empty=False)
+            mock_to_records.return_value = [{"tree": "record"}]
+            mock_psets.return_value = []
 
             # Execute task
             task = execute_generate_tree_model.delay(valid_request_params.model_dump())
             result = task.get(timeout=10)
 
             # Verify integration
-            mock_fetcher.fetch_tree_data.assert_called_once()
-            mock_baum.create_tree_model.assert_called_once()
-            mock_save.assert_called_once()
+            mock_fetcher_class.fetch_tree_data.assert_called_once()
+            mock_app.build_ifc.assert_called_once()
 
             # Verify result
             assert "model" in result
-            assert result["model"]["filename"] == "test_tree.ifc"
+            assert result["model"]["filename"].startswith("Baeume_")
 
 
 @pytest.mark.slow
@@ -193,20 +198,23 @@ def test_task_execution_performance(valid_request_params, sample_tree_data):
 
     with patch(
         "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
-    ) as mock_fetcher, patch(
-        "src.api.ogc_api.services.generate_bim_modells.baum_modeller"
-    ) as mock_baum, patch(
-        "src.api.ogc_api.services.generate_bim_modells.save_ifc_file_on_server"
-    ) as mock_save:
+    ) as mock_fetcher_class, patch(
+        "src.api.ogc_api.services.generate_bim_modells.DataProcessor"
+    ) as mock_processor, patch(
+        "src.api.ogc_api.services.generate_bim_modells.dataframe_to_records"
+    ) as mock_to_records, patch(
+        "src.api.ogc_api.services.generate_bim_modells.tree_crown_detail_from_containers"
+    ), patch(
+        "src.api.ogc_api.services.generate_bim_modells.extract_psets_basepoint"
+    ) as mock_psets, patch(
+        "src.api.ogc_api.services.generate_bim_modells.TreesGenericApp"
+    ):
 
         # Mock dependencies
-        mock_fetcher.fetch_tree_data.return_value = sample_tree_data
-        mock_baum.create_tree_model.return_value = "/path/to/tree_model.ifc"
-        mock_save.return_value = (
-            "tree_model.ifc",
-            "http://example.com/tree_model.ifc",
-            "https://example.com/tree_model.ifc",
-        )
+        mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
+        mock_processor.raw_data_to_dataframe.return_value = Mock(empty=False)
+        mock_to_records.return_value = [{"tree": "record"}]
+        mock_psets.return_value = []
 
         # Execute task and measure time
         start_time = time.time()

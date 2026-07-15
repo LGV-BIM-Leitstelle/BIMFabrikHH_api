@@ -1,8 +1,9 @@
 """
 Tests for city model generation functionality.
 
-NOTE: These tests use .delay() which requires a running Celery worker.
-Skip with: pytest -m "not requires_worker"
+Tasks run in Celery eager mode (see the ``celery_eager_mode`` fixture in
+conftest.py), so ``.delay()``/``.get()`` execute in-process without a running
+worker or broker. Heavy core dependencies are mocked.
 """
 
 from unittest.mock import Mock, patch
@@ -10,11 +11,16 @@ from unittest.mock import Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from src.api.ogc_api.services.generate_bim_modells import \
-    execute_generate_city_model
+from src.api.ogc_api.services.generate_bim_modells import execute_generate_city_model
 
-# Mark all tests in this file as integration tests requiring Celery workers
-pytestmark = [pytest.mark.integration, pytest.mark.requires_worker, pytest.mark.slow]
+# Integration-style tests that exercise the full task in eager mode.
+pytestmark = [pytest.mark.integration, pytest.mark.celery, pytest.mark.city]
+
+
+@pytest.fixture(autouse=True)
+def _enable_eager(celery_eager_mode):
+    """Run all tasks in this module eagerly (no worker/broker required)."""
+    yield
 
 
 @pytest.fixture
@@ -66,38 +72,29 @@ class TestCityModelGeneration:
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
         ) as mock_fetcher_class, patch(
-            "src.api.ogc_api.services.generate_bim_modells.check_folder_exists"
-        ) as mock_check, patch(
-            "src.api.ogc_api.services.generate_bim_modells.process_gml_to_ifc"
-        ) as mock_process, patch(
-            "src.api.ogc_api.services.generate_bim_modells.save_ifc_file_on_server"
-        ) as mock_save:
+            "src.api.ogc_api.services.generate_bim_modells.extract_level_of_geometry",
+            return_value=1,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.transform_file_names_for_lod",
+            side_effect=lambda files, lod: files,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.CityGenericApp"
+        ) as mock_app:
 
             # Mock dependencies
-            mock_fetcher = Mock()
-            mock_fetcher.fetch_citymodel_tiles.return_value = sample_city_tiles
-            mock_fetcher_class.return_value = mock_fetcher
+            mock_fetcher_class.fetch_citymodel_tiles.return_value = sample_city_tiles
+            mock_app.from_gml_files.return_value = "/path/to/city_model.ifc"
 
-            mock_check.return_value = "/path/to/folder"
-            mock_process.return_value = sample_ifc_content
-            mock_save.return_value = (
-                "city_model.ifc",
-                "http://example.com/city_model.ifc",
-                "https://example.com/city_model.ifc",
-            )
-
-            # Execute task using the correct pattern
+            # Execute task (runs eagerly in-process)
             task = execute_generate_city_model.delay(
                 valid_city_request_params.model_dump()
             )
             result = task.get(timeout=10)
 
             # Verify result structure
+            mock_app.from_gml_files.assert_called_once()
             assert "model" in result
-            assert (
-                result["model"]["filename"].startswith("Stadtmodell_")
-                or result["model"]["filename"] == "city_model.ifc"
-            )
+            assert result["model"]["filename"].startswith("Stadtmodell_")
             assert result["model"]["content_type"] == "application/x-step"
 
     @pytest.mark.parametrize(
@@ -121,15 +118,15 @@ class TestCityModelGeneration:
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
         ) as mock_fetcher_class:
             # Mock dependency to return too many tiles
-            mock_fetcher = Mock()
-            mock_fetcher.fetch_citymodel_tiles.return_value = too_many_tiles
-            mock_fetcher_class.return_value = mock_fetcher
+            mock_fetcher_class.fetch_citymodel_tiles.return_value = too_many_tiles
 
             # Execute task and expect ValueError
-            task = execute_generate_city_model.delay(
-                valid_city_request_params.model_dump()
-            )
-            with pytest.raises(ValueError, match="Anzahl der Kacheln überschreitet die Grenze"):
+            with pytest.raises(
+                ValueError, match="Anzahl der Kacheln überschreitet die Grenze"
+            ):
+                task = execute_generate_city_model.delay(
+                    valid_city_request_params.model_dump()
+                )
                 task.get(timeout=10)
 
     def test_city_model_exception_handling(self, valid_city_request_params):
@@ -138,17 +135,15 @@ class TestCityModelGeneration:
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
         ) as mock_fetcher_class:
             # Mock dependency to raise exception
-            mock_fetcher = Mock()
-            mock_fetcher.fetch_citymodel_tiles.side_effect = Exception(
+            mock_fetcher_class.fetch_citymodel_tiles.side_effect = Exception(
                 "Processing error"
             )
-            mock_fetcher_class.return_value = mock_fetcher
 
             # Execute task and expect failure
-            task = execute_generate_city_model.delay(
-                valid_city_request_params.model_dump()
-            )
             with pytest.raises(Exception, match="Processing error"):
+                task = execute_generate_city_model.delay(
+                    valid_city_request_params.model_dump()
+                )
                 task.get(timeout=10)
 
 
@@ -162,23 +157,19 @@ class TestCityModelIntegration:
         """Integration test for city model generation with mocked external dependencies."""
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
-        ) as mock_fetcher, patch(
-            "src.api.ogc_api.services.generate_bim_modells.check_folder_exists"
-        ) as mock_check, patch(
-            "src.api.ogc_api.services.generate_bim_modells.process_gml_to_ifc"
-        ) as mock_process, patch(
-            "src.api.ogc_api.services.generate_bim_modells.save_ifc_file_on_server"
-        ) as mock_save:
+        ) as mock_fetcher_class, patch(
+            "src.api.ogc_api.services.generate_bim_modells.extract_level_of_geometry",
+            return_value=1,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.transform_file_names_for_lod",
+            side_effect=lambda files, lod: files,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.CityGenericApp"
+        ) as mock_app:
 
             # Mock external dependencies
-            mock_fetcher.fetch_citymodel_tiles.return_value = sample_city_tiles
-            mock_check.return_value = "/path/to/city_data"
-            mock_process.return_value = sample_ifc_content
-            mock_save.return_value = (
-                "test_city.ifc",
-                "http://localhost/test_city.ifc",
-                "https://localhost/test_city.ifc",
-            )
+            mock_fetcher_class.fetch_citymodel_tiles.return_value = sample_city_tiles
+            mock_app.from_gml_files.return_value = "/path/to/city_data/city_model.ifc"
 
             # Execute task
             task = execute_generate_city_model.delay(
@@ -187,11 +178,9 @@ class TestCityModelIntegration:
             result = task.get(timeout=10)
 
             # Verify integration
-            mock_fetcher.fetch_citymodel_tiles.assert_called_once()
-            mock_check.assert_called_once()
-            mock_process.assert_called_once()
-            mock_save.assert_called_once()
+            mock_fetcher_class.fetch_citymodel_tiles.assert_called_once()
+            mock_app.from_gml_files.assert_called_once()
 
             # Verify result
             assert "model" in result
-            assert result["model"]["filename"] == "test_city.ifc"
+            assert result["model"]["filename"].startswith("Stadtmodell_")

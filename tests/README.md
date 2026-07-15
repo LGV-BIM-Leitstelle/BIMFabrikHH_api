@@ -58,7 +58,7 @@ Comprehensive Celery task tests (pytest):
 - Input validation
 - Error handling
 
-### `test_bim_model_generation.py`
+### `test_bim_model_tests.py`
 BIM model generation tests (pytest):
 - Tree model generation
 - City model generation
@@ -78,11 +78,16 @@ Basic Celery worker tests:
 - Simple task definition and execution
 
 ### `test_celery_database.py`
-Legacy Celery database inspection tests (unittest):
+Live Celery SQLite database inspection tests (pytest):
 - Database existence and structure
 - Table schema validation
-- Task count and status reporting
+- Task count reporting
 - Database integrity checks
+- Skips gracefully when no database file exists (fresh checkout / Redis backend)
+
+### `test_admission_control.py`
+Admission control tests (rate limiting and concurrency), using an in-memory
+fake Redis so no live Redis instance is required.
 
 ### `test_database.py`
 Comprehensive database tests with pytest fixtures:
@@ -156,19 +161,14 @@ pytest tests/ -v
 pytest tests/ --cov=src --cov-report=html
 ```
 
-### Using unittest (Legacy)
+### Convenience runner
 
-**Run all tests:**
+`run_tests.py` is a thin wrapper that delegates to pytest:
 ```bash
+# Run all tests
 python tests/run_tests.py
-```
 
-**Run specific test:**
-```bash
-# Run Celery tasks test
-python tests/run_tests.py celery_tasks
-
-# Run Celery database test
+# Run a specific test module by short name (test_<name>.py)
 python tests/run_tests.py celery_database
 ```
 
@@ -204,7 +204,7 @@ python -m unittest tests.test_celery_tasks.TestCeleryTasks
 
 ## Test Structure
 
-Tests use **pytest** framework (with some legacy unittest tests) and follow these conventions:
+Tests use the **pytest** framework and follow these conventions:
 
 ### Pytest Tests (Recommended)
 - Test classes don't require inheritance
@@ -212,12 +212,6 @@ Tests use **pytest** framework (with some legacy unittest tests) and follow thes
 - Use pytest fixtures for setup/teardown
 - Use pytest markers for categorization
 - Clear assertions with helpful error messages
-
-### Legacy Unittest Tests
-- Test classes inherit from `unittest.TestCase`
-- Test methods start with `test_`
-- Use setUp() and tearDown() methods
-- Compatible with both pytest and unittest runners
 
 ### Test Organization
 - **Unit tests**: Fast, isolated, mocked dependencies
@@ -235,6 +229,7 @@ Current test coverage by component:
 | **Celery Tasks** | ✅ Comprehensive | `test_celery_tasks.py` |
 | **BIM Models** | ✅ Good | `test_bim_model_generation.py` |
 | **Celery Config** | ✅ Good | `test_celery_configuration.py` |
+| **Admission Controll** | ✅ Good | `test_admission_control.py` |
 | **Tree Models** | ✅ Good (Legacy) | `test_tree_model_generation.py` |
 | **City Models** | ✅ Good (Legacy) | `test_city_model_generation.py` |
 | **DGM Models** | ✅ Good (Legacy) | `test_dgm_model_generation.py` |

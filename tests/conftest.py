@@ -13,8 +13,7 @@ from unittest.mock import Mock
 import pytest
 from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
 from BIMFabrikHH_core.data_models.params_tree import Component, Container
-from BIMFabrikHH_core.data_models.params_tree import \
-    RequestParams as TreeRequestParams
+from BIMFabrikHH_core.data_models.params_tree import RequestParams as TreeRequestParams
 
 # Add the project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -55,6 +54,28 @@ def mock_celery_task_with_id():
         return task
 
     return _create_task
+
+
+@pytest.fixture
+def celery_eager_mode():
+    """Run Celery tasks eagerly (in-process) without a worker or broker.
+
+    Enabling ``task_always_eager`` executes ``.delay()`` calls synchronously in
+    the current process, and ``task_eager_propagates`` re-raises task
+    exceptions from ``.get()``. This removes the need for a running Celery
+    worker or a live broker/result backend (Redis or SQLite) during tests.
+    """
+    from src.api.ogc_api.services.generate_bim_modells import app
+
+    prev_always = app.conf.task_always_eager
+    prev_propagates = app.conf.task_eager_propagates
+    app.conf.task_always_eager = True
+    app.conf.task_eager_propagates = True
+    try:
+        yield app
+    finally:
+        app.conf.task_always_eager = prev_always
+        app.conf.task_eager_propagates = prev_propagates
 
 
 # Data fixtures

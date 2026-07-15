@@ -11,7 +11,10 @@ import shutil
 import sqlite3
 from typing import Any
 
-from src.database import CELERY_DB_PATH
+from src.database import get_celery_db_path
+
+# Resolved once at import time; tests may patch this module attribute.
+CELERY_DB_PATH = get_celery_db_path()
 
 
 def get_database_info() -> dict[str, Any]:
