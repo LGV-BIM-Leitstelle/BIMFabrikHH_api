@@ -40,6 +40,7 @@ poetry.lock
 
 # Docker
 .dockerignore
+docker-compose*.yml
 
 # OS
 .DS_Store
