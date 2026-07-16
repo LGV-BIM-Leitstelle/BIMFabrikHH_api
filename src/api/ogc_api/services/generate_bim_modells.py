@@ -32,7 +32,8 @@ from BIMFabrikHH_core.core.ogc_extractor import (
     extract_level_of_geometry,
     extract_psets_basepoint,
 )
-from celery import Celery
+from celery import Celery, states
+from celery.exceptions import Ignore
 
 from src.api.config.settings import api_settings
 from src.database import get_celery_config
@@ -174,8 +175,10 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
     except Exception as e:
         self.update_state(
-            state="FAILURE",
+            state=states.FAILURE,
             meta={
+                "exc_type": type(e).__name__,
+                "exc_message": str(e),
                 "error": f"Error generating tree model: {str(e)}",
                 "troubleshooting": [
                     "Make sure BIMFabrikHH core package is available",
@@ -185,7 +188,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
                 ],
             },
         )
-        raise
+        raise Ignore()
 
 
 @app.task(bind=True)
@@ -295,8 +298,10 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
     except Exception as e:
         self.update_state(
-            state="FAILURE",
+            state=states.FAILURE,
             meta={
+                "exc_type": type(e).__name__,
+                "exc_message": str(e),
                 "error": f"Error generating city model: {str(e)}",
                 "troubleshooting": [
                     "Make sure BIMFabrikHH core package is available",
@@ -306,7 +311,7 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
                 ],
             },
         )
-        raise
+        raise Ignore()
 
 
 @app.task(bind=True)
