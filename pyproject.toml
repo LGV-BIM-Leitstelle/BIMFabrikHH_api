@@ -38,6 +38,7 @@ httpx = "^0.28.0"
 pytest = "^8.4.1"
 pytest-cov = "^6.0.0"
 ipykernel = "*"
+locust = "*"
 
 [build-system]
 requires = ["poetry-core"]
