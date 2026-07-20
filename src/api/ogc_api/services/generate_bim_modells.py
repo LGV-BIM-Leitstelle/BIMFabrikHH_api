@@ -52,6 +52,26 @@ app = Celery(
     "hamburg", broker=celery_config.broker_url, backend=celery_config.backend_url
 )
 
+# Task queue, routing and reliability configuration.
+#
+# All model-generation tasks are CPU-heavy and equivalent in weight, so they
+# share a single dedicated "processing" queue instead of per-model-type queues.
+# ``task_routes`` maps every task in this module to that queue, and
+# ``task_default_queue`` makes it the default so the worker only needs
+# ``-Q processing``.
+#
+# ``worker_prefetch_multiplier=1`` makes a worker reserve only one task at a
+# time, so long jobs are load-balanced evenly instead of one child hoarding the
+# backlog. ``task_acks_late=True`` acknowledges a task only after it completes,
+# so an in-flight job survives a worker crash (it is redelivered).
+PROCESSING_QUEUE = "processing"
+app.conf.update(
+    task_default_queue=PROCESSING_QUEUE,
+    task_routes={f"{__name__}.*": {"queue": PROCESSING_QUEUE}},
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
+)
+
 
 def _release_admission_slot(task_id: str) -> None:
     """Release the admission-control concurrency slot for a finished task.
