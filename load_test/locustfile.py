@@ -88,22 +88,22 @@ PROCESS_IDS = (
 RANDOMIZE_BBOX = True
 
 # Fixed anchor = lower-left corner of the original box = mean of the center point.
-CENTER_MEAN_LON = 9.9756
-CENTER_MEAN_LAT = 53.5522
+CENTER_MEAN_LON = 9.992790
+CENTER_MEAN_LAT = 53.550603
 
 # Original box extents in degrees, used as the median of the size distributions.
 BASE_WIDTH_DEG = 0.0033  # lon extent, ~218 m at this latitude
 BASE_HEIGHT_DEG = 0.0014  # lat extent, ~156 m
 
 # Center: standard deviation of the Gaussian jitter, in meters (isotropic).
-CENTER_SIGMA_METERS = 250.0
+CENTER_SIGMA_METERS = 1000.0
 
 # Size: standard deviation of the log-normal in log-space (~+/-28% at 0.25).
-SIZE_LOG_SIGMA = 0.25
+SIZE_LOG_SIGMA = 0.5
 
 # Size clamps as multiples of the base dimension (trim log-normal tails).
-SIZE_MIN_FACTOR = 0.4
-SIZE_MAX_FACTOR = 2.5
+SIZE_MIN_FACTOR = 0.2
+SIZE_MAX_FACTOR = 4
 
 # WGS84 meters-per-degree approximations at the anchor latitude.
 _METERS_PER_DEG_LAT = 111_320.0
@@ -265,7 +265,8 @@ class OGCProcessUser(FastHttpUser):
             # 429 = admission control (rate limit or concurrency limit). This is
             # an expected outcome under load, not a server failure.
             if resp.status_code == 429:
-                resp.success()
+                # resp.success()
+                resp.failure("Request rejected by admission control (429)")
                 return None
 
             if resp.status_code != 201:
