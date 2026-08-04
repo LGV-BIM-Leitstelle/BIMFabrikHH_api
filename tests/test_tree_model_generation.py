@@ -102,7 +102,9 @@ class TestTreeModelGeneration:
             assert "url-http" in result["model"]
             assert "url-https" in result["model"]
 
-    def test_tree_model_no_trees_found(self, valid_request_params, sample_tree_data):
+    def test_tree_model_no_trees_found(
+        self, valid_request_params, sample_tree_data, assert_task_failed
+    ):
         """Test tree model generation when no trees are found in the bounding box."""
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
@@ -114,14 +116,17 @@ class TestTreeModelGeneration:
             mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
             mock_processor.raw_data_to_dataframe.return_value = Mock(empty=True)
 
-            # Execute task and expect a ValueError about no trees
-            with pytest.raises(ValueError, match="No trees found"):
-                task = execute_generate_tree_model.delay(
-                    valid_request_params.model_dump()
-                )
-                task.get(timeout=10)
+            # Task records a FAILURE state with a ValueError about no trees
+            assert_task_failed(
+                execute_generate_tree_model,
+                valid_request_params.model_dump(),
+                match="No trees found",
+                exc_type="ValueError",
+            )
 
-    def test_tree_model_exception_handling(self, valid_request_params):
+    def test_tree_model_exception_handling(
+        self, valid_request_params, assert_task_failed
+    ):
         """Test tree model generation exception handling."""
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
@@ -129,12 +134,12 @@ class TestTreeModelGeneration:
             # Mock dependency to raise exception
             mock_fetcher_class.fetch_tree_data.side_effect = Exception("Network error")
 
-            # Execute task and expect failure
-            with pytest.raises(Exception, match="Network error"):
-                task = execute_generate_tree_model.delay(
-                    valid_request_params.model_dump()
-                )
-                task.get(timeout=10)
+            # Task records a FAILURE state carrying the underlying error message
+            assert_task_failed(
+                execute_generate_tree_model,
+                valid_request_params.model_dump(),
+                match="Network error",
+            )
 
     @pytest.mark.parametrize(
         "invalid_input",
@@ -145,11 +150,10 @@ class TestTreeModelGeneration:
             {},
         ],
     )
-    def test_tree_model_invalid_input(self, invalid_input):
+    def test_tree_model_invalid_input(self, invalid_input, assert_task_failed):
         """Test tree model generation with invalid input data."""
-        with pytest.raises(Exception):
-            task = execute_generate_tree_model.delay(invalid_input)
-            task.get(timeout=10)
+        # Invalid input fails validation and is recorded as a FAILURE state
+        assert_task_failed(execute_generate_tree_model, invalid_input)
 
 
 class TestTreeModelIntegration:

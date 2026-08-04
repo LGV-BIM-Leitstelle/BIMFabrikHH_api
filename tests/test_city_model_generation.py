@@ -112,7 +112,9 @@ class TestCityModelGeneration:
             ],  # 6 files
         ],
     )
-    def test_city_model_too_many_tiles(self, valid_city_request_params, too_many_tiles):
+    def test_city_model_too_many_tiles(
+        self, valid_city_request_params, too_many_tiles, assert_task_failed
+    ):
         """Test city model generation with too many tiles."""
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
@@ -120,16 +122,17 @@ class TestCityModelGeneration:
             # Mock dependency to return too many tiles
             mock_fetcher_class.fetch_citymodel_tiles.return_value = too_many_tiles
 
-            # Execute task and expect ValueError
-            with pytest.raises(
-                ValueError, match="Anzahl der Kacheln überschreitet die Grenze"
-            ):
-                task = execute_generate_city_model.delay(
-                    valid_city_request_params.model_dump()
-                )
-                task.get(timeout=10)
+            # Task records a FAILURE state with a ValueError about the tile limit
+            assert_task_failed(
+                execute_generate_city_model,
+                valid_city_request_params.model_dump(),
+                match="Anzahl der Kacheln überschreitet die Grenze",
+                exc_type="ValueError",
+            )
 
-    def test_city_model_exception_handling(self, valid_city_request_params):
+    def test_city_model_exception_handling(
+        self, valid_city_request_params, assert_task_failed
+    ):
         """Test city model generation exception handling."""
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
@@ -139,12 +142,12 @@ class TestCityModelGeneration:
                 "Processing error"
             )
 
-            # Execute task and expect failure
-            with pytest.raises(Exception, match="Processing error"):
-                task = execute_generate_city_model.delay(
-                    valid_city_request_params.model_dump()
-                )
-                task.get(timeout=10)
+            # Task records a FAILURE state carrying the underlying error message
+            assert_task_failed(
+                execute_generate_city_model,
+                valid_city_request_params.model_dump(),
+                match="Processing error",
+            )
 
 
 class TestCityModelIntegration:

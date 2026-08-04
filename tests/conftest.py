@@ -6,14 +6,16 @@ in the BIMFabrikHH API project.
 """
 
 import os
+import re
 import sys
 from typing import Any, Dict
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
 from BIMFabrikHH_core.data_models.params_tree import Component, Container
 from BIMFabrikHH_core.data_models.params_tree import RequestParams as TreeRequestParams
+from celery import states
 
 # Add the project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -76,6 +78,44 @@ def celery_eager_mode():
     finally:
         app.conf.task_always_eager = prev_always
         app.conf.task_eager_propagates = prev_propagates
+
+
+@pytest.fixture
+def assert_task_failed():
+    """Assert a model-generation task recorded a FAILURE state.
+
+    The generation tasks catch exceptions, record a ``FAILURE`` state with a
+    metadata dict via ``update_state`` and then ``raise Ignore()`` so Celery
+    keeps that custom state (the API reads ``job.state``/``job.info``). Under
+    ``task_always_eager`` the raised ``Ignore`` surfaces as an ``IGNORED``
+    result and ``.get()`` returns ``None``, so the failure is asserted via the
+    captured ``update_state`` metadata rather than a re-raised exception.
+
+    Returns a callable ``(task, input_data, *, match=None, exc_type=None)`` that
+    runs the task eagerly and returns the captured FAILURE metadata dict.
+    """
+
+    def _run(task, input_data, *, match=None, exc_type=None):
+        with patch.object(task, "update_state") as update_state:
+            task.delay(input_data)
+
+        failure_meta = None
+        for call in update_state.call_args_list:
+            state = call.kwargs.get("state") or (call.args[0] if call.args else None)
+            if state == states.FAILURE:
+                failure_meta = call.kwargs.get("meta") or (
+                    call.args[1] if len(call.args) > 1 else None
+                )
+
+        assert failure_meta is not None, "Task did not record a FAILURE state"
+        if exc_type is not None:
+            assert failure_meta.get("exc_type") == exc_type
+        if match is not None:
+            message = failure_meta.get("exc_message", "")
+            assert re.search(match, message), f"{match!r} not found in {message!r}"
+        return failure_meta
+
+    return _run
 
 
 # Data fixtures
