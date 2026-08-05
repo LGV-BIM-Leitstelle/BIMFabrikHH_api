@@ -48,6 +48,13 @@ class CeleryWorkerManager:
         """Start the Celery worker in a separate process"""
         print("Starting Celery worker...")
 
+        # Worker pool and concurrency are configurable via the environment so the
+        # number of parallel processing jobs can be tuned per deployment.
+        # ``prefork`` uses child processes for real parallelism on CPU-bound IFC
+        # generation; ``CELERY_WORKER_CONCURRENCY`` sets how many run in parallel.
+        worker_pool = os.getenv("CELERY_WORKER_POOL", "prefork")
+        worker_concurrency = os.getenv("CELERY_WORKER_CONCURRENCY", "2")
+
         # Start the worker process directly using celery command
         cmd = [
             sys.executable,
@@ -57,8 +64,10 @@ class CeleryWorkerManager:
             "src.api.ogc_api.services.generate_bim_modells",
             "worker",
             "--loglevel=info",
-            "--concurrency=1",
-            "--pool=solo",
+            f"--concurrency={worker_concurrency}",
+            f"--pool={worker_pool}",
+            "-Q",
+            "processing",
         ]
 
         print(f"Starting Celery with command: {' '.join(cmd)}")

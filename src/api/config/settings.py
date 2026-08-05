@@ -4,6 +4,7 @@ Uses environment variables with fallback to defaults.
 """
 
 import logging
+import os
 from pathlib import Path
 
 from pydantic import HttpUrl
@@ -13,6 +14,45 @@ logger = logging.getLogger(__name__)
 
 # Get project root directory (3 levels up from this file)
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+
+
+def admission_control_enabled() -> bool:
+    """Return whether application-level admission control is active.
+
+    Admission control (Redis-backed rate limiting and concurrent-job limiting)
+    is only enabled in production mode, i.e. when the Redis backend is selected
+    via ``--db redis`` (which sets ``BACKEND_DB=redis``). For the sqlite backend
+    used in local/testing runs it is disabled.
+
+    Evaluated at call time so it reflects the ``BACKEND_DB`` value set by the
+    application launcher at runtime.
+    """
+    return os.getenv("BACKEND_DB", "sqlite").lower() == "redis"
+
+
+def rate_limit_enabled() -> bool:
+    """Return whether per-client request rate limiting is active.
+
+    Rate limiting is an opt-in subset of admission control. It requires both:
+
+    * Admission control to be active (Redis backend, see
+      :func:`admission_control_enabled`), and
+    * The independent ``ENABLE_RATE_LIMIT`` flag to be truthy
+      (e.g. ``true``/``1``/``yes``).
+
+    This lets the production server (Redis backend) keep the per-client
+    concurrency limit while turning request rate limiting off. Defaults to
+    disabled.
+
+    Evaluated at call time so it reflects the ``BACKEND_DB`` and
+    ``ENABLE_RATE_LIMIT`` values set at runtime.
+    """
+    flag_enabled = os.getenv("ENABLE_RATE_LIMIT", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+    return admission_control_enabled() and flag_enabled
 
 
 class APISettings(BaseSettings):
@@ -58,6 +98,28 @@ class APISettings(BaseSettings):
     DATA_LOD1_FOLDER: str
     DATA_LOD2_FOLDER: str
     DATA_DGM_FOLDER: str
+
+    # Redis configuration (used for admission control: rate limiting and concurrency)
+    # Optional so that the sqlite/local backend runs without Redis configured.
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+
+    # Admission control - rate limiting (opt-in, independent of BACKEND_DB)
+    ENABLE_RATE_LIMIT: bool = False
+    RATE_LIMIT_TIMES: int = 5
+    RATE_LIMIT_SECONDS: int = 60
+
+    # Admission control - concurrent jobs per client identifier
+    MAX_CONCURRENT_JOBS: int = 2
+
+    @property
+    def redis_url(self) -> str:
+        """Return the Redis connection URL used for admission control.
+
+        Built from the individual host/port/db settings.
+        """
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
 
 # Global settings instance
