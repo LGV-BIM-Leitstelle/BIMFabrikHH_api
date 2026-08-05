@@ -30,6 +30,31 @@ def admission_control_enabled() -> bool:
     return os.getenv("BACKEND_DB", "sqlite").lower() == "redis"
 
 
+def rate_limit_enabled() -> bool:
+    """Return whether per-client request rate limiting is active.
+
+    Rate limiting is an opt-in subset of admission control. It requires both:
+
+    * Admission control to be active (Redis backend, see
+      :func:`admission_control_enabled`), and
+    * The independent ``ENABLE_RATE_LIMIT`` flag to be truthy
+      (e.g. ``true``/``1``/``yes``).
+
+    This lets the production server (Redis backend) keep the per-client
+    concurrency limit while turning request rate limiting off. Defaults to
+    disabled.
+
+    Evaluated at call time so it reflects the ``BACKEND_DB`` and
+    ``ENABLE_RATE_LIMIT`` values set at runtime.
+    """
+    flag_enabled = os.getenv("ENABLE_RATE_LIMIT", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+    return admission_control_enabled() and flag_enabled
+
+
 class APISettings(BaseSettings):
     """API configuration settings with environment variable support."""
 
@@ -80,7 +105,8 @@ class APISettings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
 
-    # Admission control - rate limiting
+    # Admission control - rate limiting (opt-in, independent of BACKEND_DB)
+    ENABLE_RATE_LIMIT: bool = False
     RATE_LIMIT_TIMES: int = 5
     RATE_LIMIT_SECONDS: int = 60
 

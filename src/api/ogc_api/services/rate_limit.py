@@ -19,7 +19,7 @@ from fastapi import Request, Response
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
 
-from src.api.config.settings import api_settings
+from src.api.config.settings import api_settings, rate_limit_enabled
 
 from .client_identity import get_client_identifier
 
@@ -69,10 +69,16 @@ _execution_rate_limiter = RateLimiter(
 async def execution_rate_limit(request: Request, response: Response) -> None:
     """Route dependency enforcing the per-identifier execution rate limit.
 
+    Rate limiting is opt-in via ``ENABLE_RATE_LIMIT`` (see
+    :func:`rate_limit_enabled`); when disabled the dependency is a no-op so the
+    per-client concurrency limit can still run on its own.
+
     When FastAPI-Limiter has not been initialized (for example in unit tests
     that construct the app without running its lifespan) the limiter is skipped
     rather than raising, keeping the endpoint usable in isolation.
     """
+    if not rate_limit_enabled():
+        return
     if FastAPILimiter.redis is None:
         logger.warning(
             "FastAPILimiter not initialized; skipping rate limit for this request"
