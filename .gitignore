@@ -13,7 +13,7 @@ temp/
 .vscode/
 *.swp
 *.swo
-.github/
+.github/agents/
 AGENTS.md
 
 # Python
