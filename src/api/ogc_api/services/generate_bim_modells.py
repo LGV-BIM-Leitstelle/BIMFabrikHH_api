@@ -60,6 +60,7 @@ def _configure_worker_logging(**_kwargs: Any) -> None:
     """
     configure_logging(force=True)
 
+
 celery_config = get_celery_config()
 app = Celery(
     "hamburg", broker=celery_config.broker_url, backend=celery_config.backend_url
@@ -239,6 +240,9 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         url_http = f"{api_settings.URL_OUTPUT_HTTP}/{filename}"
         url_https = f"{api_settings.URL_OUTPUT_HTTPS}/{filename}"
 
+        logger.info(
+            "Tree model generated successfully: %s (task %s)", filename, self.request.id
+        )
         return {
             "model": {
                 "filename": filename,
@@ -249,6 +253,9 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         }
 
     except Exception as e:
+        logger.exception(
+            "Tree model generation failed (task %s): %s", self.request.id, e
+        )
         self.update_state(
             state=states.FAILURE,
             meta={
@@ -284,6 +291,7 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
     """
     self.update_state(state="PROGRESS", meta={"percent": 0})
 
+    logger.info("Starting city model generation (task %s)", self.request.id)
     try:
         request_params = RequestParams(**input_data)
         bbox = request_params.bbox
@@ -362,6 +370,9 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             },
         )
 
+        logger.info(
+            "City model generated successfully: %s (task %s)", filename, self.request.id
+        )
         return {
             "model": {
                 "filename": filename,
@@ -372,6 +383,9 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         }
 
     except Exception as e:
+        logger.exception(
+            "City model generation failed (task %s): %s", self.request.id, e
+        )
         self.update_state(
             state=states.FAILURE,
             meta={
@@ -400,6 +414,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
     Returns:
         Dictionary containing task status and results.
     """
+    logger.info("Starting DGM model generation (task %s)", self.request.id)
     try:
         # Extract request parameters
         request_params = RequestParams(**input_data)
@@ -450,6 +465,9 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         url_http = f"{api_settings.URL_OUTPUT_HTTP}/{filename}"
         url_https = f"{api_settings.URL_OUTPUT_HTTPS}/{filename}"
 
+        logger.info(
+            "DGM model generated successfully: %s (task %s)", filename, self.request.id
+        )
         return {
             "model": {
                 "filename": filename,
@@ -461,5 +479,5 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
 
     except Exception as e:
         # Log the error and re-raise so Celery marks task as failed
-        logger.error(f"DGM generation failed: {e}")
+        logger.exception("DGM generation failed (task %s): %s", self.request.id, e)
         raise
