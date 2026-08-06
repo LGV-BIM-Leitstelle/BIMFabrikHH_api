@@ -34,8 +34,10 @@ from BIMFabrikHH_core.core.ogc_extractor import (
 )
 from celery import Celery, states
 from celery.exceptions import Ignore
+from celery.signals import setup_logging as celery_setup_logging
 from celery.signals import task_postrun, task_revoked
 
+from src.api.config.logging_config import setup_logging as configure_logging
 from src.api.config.settings import api_settings
 from src.database import get_celery_config
 
@@ -46,6 +48,17 @@ from .http_requests import DataFetcher
 OUTPUT_FOLDER = Path(api_settings.OUTPUT_FOLDER_PATH)
 
 logger = logging.getLogger(__name__)
+
+
+@celery_setup_logging.connect
+def _configure_worker_logging(**_kwargs: Any) -> None:
+    """Apply the shared logging configuration inside the Celery worker.
+
+    Connecting a receiver to Celery's ``setup_logging`` signal disables Celery's
+    own logging setup, so the worker (and its prefork child processes) uses the
+    same console and shared rotating file handlers as the API process.
+    """
+    configure_logging(force=True)
 
 celery_config = get_celery_config()
 app = Celery(
@@ -64,12 +77,18 @@ app = Celery(
 # time, so long jobs are load-balanced evenly instead of one child hoarding the
 # backlog. ``task_acks_late=True`` acknowledges a task only after it completes,
 # so an in-flight job survives a worker crash (it is redelivered).
+#
+# ``worker_redirect_stdouts=False`` stops Celery from replacing ``sys.stdout``/
+# ``sys.stderr`` with a logging proxy. Logging is configured explicitly via the
+# ``setup_logging`` signal, so leaving the redirect on would route stray stdout
+# writes back through the logging system and risk duplicate console lines.
 PROCESSING_QUEUE = "processing"
 app.conf.update(
     task_default_queue=PROCESSING_QUEUE,
     task_routes={f"{__name__}.*": {"queue": PROCESSING_QUEUE}},
     worker_prefetch_multiplier=1,
     task_acks_late=True,
+    worker_redirect_stdouts=False,
 )
 
 
@@ -125,7 +144,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
     """
     self.update_state(state="PROGRESS", meta={"percent": 0})
 
-    print("Input data for tree model generation:", input_data)
+    logger.info("Input data for tree model generation: %s", input_data)
     try:
         request_params = RequestParams(**input_data)
         bbox = request_params.bbox
@@ -148,7 +167,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             raise ValueError("No tree data found in the specified bounding box")
 
         tree_count = len(raw_tree_data.get("features", []))
-        print(f"Found {tree_count} trees in the bounding box")
+        logger.info("Found %s trees in the bounding box", tree_count)
 
         # Process data using core package
         self.update_state(state="PROGRESS", meta={"percent": 75})

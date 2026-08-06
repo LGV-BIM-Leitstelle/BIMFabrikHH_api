@@ -6,12 +6,15 @@ Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation un
 BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
 """
 
+import logging
 import os
 import shutil
 import sqlite3
 from typing import Any
 
 from src.database import get_celery_db_path
+
+logger = logging.getLogger(__name__)
 
 # Resolved once at import time; tests may patch this module attribute.
 CELERY_DB_PATH = get_celery_db_path()
@@ -84,7 +87,7 @@ def backup_database(backup_path: str | None = None) -> str:
         backup_path = os.path.join(db_dir, backup_name)
 
     shutil.copy2(CELERY_DB_PATH, backup_path)
-    print(f"Database backed up to: {backup_path}")
+    logger.info("Database backed up to: %s", backup_path)
     return backup_path
 
 
@@ -100,7 +103,7 @@ def cleanup_old_database(max_rows: int = 50) -> bool:
     """
     """Clean up old database rows when they exceed the specified limit"""
     if not os.path.exists(CELERY_DB_PATH):
-        print("Database not found, nothing to clean")
+        logger.info("Database not found, nothing to clean")
         return True
 
     try:
@@ -111,7 +114,7 @@ def cleanup_old_database(max_rows: int = 50) -> bool:
         cursor.execute("SELECT COUNT(*) FROM celery_taskmeta")
         current_count = cursor.fetchone()[0]
 
-        print(f"Current task count: {current_count}")
+        logger.info("Current task count: %s", current_count)
 
         if current_count > max_rows:
             # Get the IDs of the oldest rows to keep only the most recent ones
@@ -138,13 +141,15 @@ def cleanup_old_database(max_rows: int = 50) -> bool:
                 )
 
                 deleted_count = current_count - max_rows
-                print(f"Cleaned up {deleted_count} old task records")
-                print(f"Kept {max_rows} most recent tasks")
+                logger.info("Cleaned up %s old task records", deleted_count)
+                logger.info("Kept %s most recent tasks", max_rows)
             else:
-                print("No recent tasks found to keep")
+                logger.warning("No recent tasks found to keep")
         else:
-            print(
-                f"Task count ({current_count}) is within limit ({max_rows}), no cleanup needed"
+            logger.info(
+                "Task count (%s) is within limit (%s), no cleanup needed",
+                current_count,
+                max_rows,
             )
 
         conn.commit()
@@ -152,7 +157,7 @@ def cleanup_old_database(max_rows: int = 50) -> bool:
         return True
 
     except Exception as e:
-        print(f"Error cleaning up database: {e}")
+        logger.error("Error cleaning up database: %s", e)
         return False
 
 

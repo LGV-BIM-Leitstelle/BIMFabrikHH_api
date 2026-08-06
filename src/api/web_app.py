@@ -9,6 +9,7 @@ Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation un
 BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>, Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>
 """
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
@@ -18,6 +19,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
+from .config.logging_config import setup_logging
 from .config.settings import rate_limit_enabled
 from .data_api.oaf_endpoints import router as oaf_router
 from .ogc_api.ogc_metadata.app_info import (
@@ -28,6 +30,8 @@ from .ogc_api.ogc_metadata.app_info import (
 )
 from .ogc_api.routes.main_ogc import router_ogc
 from .ogc_api.services.rate_limit import close_rate_limiter, init_rate_limiter
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -43,6 +47,9 @@ def create_app() -> FastAPI:
     Raises:
         RuntimeError: If required directories (output, static) do not exist.
     """
+    # Ensure logging is configured before anything emits log records.
+    setup_logging()
+
     # Data API
     data_app = FastAPI(
         title="BIMFabrikHH API", description=app_data_description, version="0.1.0"
@@ -86,9 +93,9 @@ def create_app() -> FastAPI:
             try:
                 await init_rate_limiter()
             except Exception as e:  # pragma: no cover - defensive startup logging
-                print(f"Error initializing rate limiter: {e}")
+                logger.error("Error initializing rate limiter: %s", e)
         else:
-            print("Rate limiting disabled; skipping rate limiter init")
+            logger.info("Rate limiting disabled; skipping rate limiter init")
 
         yield
 
@@ -96,7 +103,7 @@ def create_app() -> FastAPI:
         try:
             await close_rate_limiter()
         except Exception as e:  # pragma: no cover - defensive shutdown logging
-            print(f"Error closing rate limiter: {e}")
+            logger.error("Error closing rate limiter: %s", e)
 
     # Static files setup for OGC app
     from pathlib import Path
@@ -136,15 +143,15 @@ def create_app() -> FastAPI:
     # Mount static files on main app
     try:
         main_app.mount("/output", StaticFiles(directory=str(output_dir)), name="output")
-        print(f"Mounted output files successfully from: {output_dir}")
+        logger.info("Mounted output files successfully from: %s", output_dir)
     except Exception as e:
-        print(f"Error mounting output directory: {e}")
+        logger.error("Error mounting output directory: %s", e)
 
     try:
         main_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-        print(f"Mounted static files successfully from: {static_dir}")
+        logger.info("Mounted static files successfully from: %s", static_dir)
     except Exception as e:
-        print(f"Error mounting static directory: {e}")
+        logger.error("Error mounting static directory: %s", e)
 
     @main_app.get("/", response_class=HTMLResponse)
     async def custom_root() -> HTMLResponse:
@@ -177,6 +184,9 @@ def main() -> None:
 
     from .config.settings import api_settings
 
+    # Configure logging before uvicorn starts so its loggers use our config.
+    setup_logging()
+
     # Get configuration from settings (which loads from .env)
     port = int(api_settings.API_PORT)
     host = api_settings.API_HOST
@@ -185,13 +195,15 @@ def main() -> None:
     if os.getenv("DOCKER_CONTAINER", "false").lower() == "true":
         host = "0.0.0.0"
 
-    print("Starting BIMFabrikHH API...")
-    print(f"Server will run on: http://{host}:{port}")
-    print(f"Data API docs: http://{host}:{port}/data/docs")
-    print(f"OGC API docs: http://{host}:{port}/ogc/docs")
+    logger.info("Starting BIMFabrikHH API...")
+    logger.info("Server will run on: http://%s:%s", host, port)
+    logger.info("Data API docs: http://%s:%s/data/docs", host, port)
+    logger.info("OGC API docs: http://%s:%s/ogc/docs", host, port)
 
     app = create_app()
-    uvicorn.run(app, host=host, port=port)
+    # Pass log_config=None so uvicorn keeps our root logging configuration
+    # instead of installing its own.
+    uvicorn.run(app, host=host, port=port, log_config=None)
 
 
 if __name__ == "__main__":

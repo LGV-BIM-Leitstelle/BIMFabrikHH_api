@@ -113,6 +113,19 @@ class APISettings(BaseSettings):
     # Admission control - concurrent jobs per client identifier
     MAX_CONCURRENT_JOBS: int = 2
 
+    # Logging configuration
+    # Per-handler log levels (console and file handlers can differ).
+    LOG_LEVEL_CONSOLE: str = "INFO"
+    LOG_LEVEL_FILE: str = "INFO"
+    # Whether the rotating file handler is attached at all.
+    LOG_FILE_ENABLED: bool = True
+    # Path (relative to project root or absolute) of the shared log file.
+    LOG_FILE_PATH: str = "logs/bimfabrikhh.log"
+    # Timed-rotation interval keyword (see TimedRotatingFileHandler ``when``),
+    # e.g. "midnight", "H", "D", "S". Number of rotated files kept as backups.
+    LOG_FILE_WHEN: str = "midnight"
+    LOG_FILE_BACKUP_COUNT: int = 14
+
     @property
     def redis_url(self) -> str:
         """Return the Redis connection URL used for admission control.
