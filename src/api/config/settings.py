@@ -134,6 +134,15 @@ class APISettings(BaseSettings):
         """
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
+    @property
+    def output_folder_abs_path(self) -> str:
+        """Return the absolute path of the output folder.
+
+        Relative ``OUTPUT_FOLDER_PATH`` values are resolved against the project
+        root; absolute values are returned unchanged.
+        """
+        return str((PROJECT_ROOT / self.OUTPUT_FOLDER_PATH).resolve())
+
     def config_summary(self) -> str:
         """Return a human-readable, multi-line summary of the active configuration.
 
@@ -150,7 +159,7 @@ class APISettings(BaseSettings):
             f"  API timeout:         {self.API_TIMEOUT}s",
             f"  API default limit:   {self.API_DEFAULT_LIMIT}",
             f"  API default CRS:     {self.API_DEFAULT_CRS}",
-            f"  Output folder:       {self.OUTPUT_FOLDER_PATH}",
+            f"  Output folder:       {self.output_folder_abs_path}",
             f"  Output URL (http):   {self.URL_OUTPUT_HTTP}",
             f"  Output URL (https):  {self.URL_OUTPUT_HTTPS}",
             f"  Data base URL:       {self.DATA_BASE_URL}",
