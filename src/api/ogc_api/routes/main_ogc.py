@@ -9,6 +9,7 @@ BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
 """
 
 import datetime
+import logging
 
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery.result import AsyncResult
@@ -35,6 +36,8 @@ from src.api.ogc_api.services.generate_bim_modells import (
 from src.api.ogc_api.services.rate_limit import execution_rate_limit
 
 router_ogc = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 PROCESS_INPUT_MODELS = {
@@ -221,6 +224,8 @@ def execute_process(
     if admission is not None:
         admission.register_job(client_id, jobId)
 
+    logger.info("Accepted %s job %s for client %s", processID, jobId, client_id)
+
     # Get base URL from settings
     base_url = str(api_settings.BASE_URL).rstrip("/")
 
@@ -304,6 +309,7 @@ def cancel_job(jobId: str) -> JSONResponse:
     job = AsyncResult(jobId, app=app)
     if job.state in ["PENDING", "STARTED"]:
         job.revoke(terminate=True)
+        logger.info("Cancelled job %s", jobId)
         return JSONResponse(content={"message": "Job cancelled"})
     else:
         raise HTTPException(status_code=400, detail="Job cannot be cancelled")
@@ -342,6 +348,7 @@ def get_job_results(jobId: str) -> JSONResponse:
         else:
             raise HTTPException(status_code=404, detail="No model data found in result")
     elif job.state == "FAILURE":
+        logger.error("Results requested for failed job %s: %s", jobId, job.info)
         raise HTTPException(status_code=500, detail=f"Job failed: {job.info}")
     else:
         raise HTTPException(status_code=404, detail="Job not found or not completed")

@@ -113,6 +113,19 @@ class APISettings(BaseSettings):
     # Admission control - concurrent jobs per client identifier
     MAX_CONCURRENT_JOBS: int = 2
 
+    # Logging configuration
+    # Per-handler log levels (console and file handlers can differ).
+    LOG_LEVEL_CONSOLE: str = "INFO"
+    LOG_LEVEL_FILE: str = "INFO"
+    # Whether the rotating file handler is attached at all.
+    LOG_FILE_ENABLED: bool = True
+    # Path (relative to project root or absolute) of the shared log file.
+    LOG_FILE_PATH: str = "logs/bimfabrikhh.log"
+    # Timed-rotation interval keyword (see TimedRotatingFileHandler ``when``),
+    # e.g. "midnight", "H", "D", "S". Number of rotated files kept as backups.
+    LOG_FILE_WHEN: str = "midnight"
+    LOG_FILE_BACKUP_COUNT: int = 14
+
     @property
     def redis_url(self) -> str:
         """Return the Redis connection URL used for admission control.
@@ -120,6 +133,53 @@ class APISettings(BaseSettings):
         Built from the individual host/port/db settings.
         """
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+    @property
+    def output_folder_abs_path(self) -> str:
+        """Return the absolute path of the output folder.
+
+        Relative ``OUTPUT_FOLDER_PATH`` values are resolved against the project
+        root; absolute values are returned unchanged.
+        """
+        return str((PROJECT_ROOT / self.OUTPUT_FOLDER_PATH).resolve())
+
+    def config_summary(self) -> str:
+        """Return a human-readable, multi-line summary of the active configuration.
+
+        Intended to be logged once during API initialization so the effective
+        settings (loaded from ``.env`` with defaults) are visible in the logs.
+        """
+        lines = [
+            "BIMFabrikHH API configuration:",
+            f"  Base URL:            {self.BASE_URL}",
+            f"  Server:              {self.API_HOST}:{self.API_PORT}",
+            f"  Trees API:           {self.TREES_API_URL}",
+            f"  Trees Hafen API:     {self.TREES_HAFEN_API_URL}",
+            f"  DGM tiles API:       {self.DGM_TILES_API_URL}",
+            f"  API timeout:         {self.API_TIMEOUT}s",
+            f"  API default limit:   {self.API_DEFAULT_LIMIT}",
+            f"  API default CRS:     {self.API_DEFAULT_CRS}",
+            f"  Output folder:       {self.output_folder_abs_path}",
+            f"  Output URL (http):   {self.URL_OUTPUT_HTTP}",
+            f"  Output URL (https):  {self.URL_OUTPUT_HTTPS}",
+            f"  Data base URL:       {self.DATA_BASE_URL}",
+            f"  Data LoD1 folder:    {self.DATA_LOD1_FOLDER}",
+            f"  Data LoD2 folder:    {self.DATA_LOD2_FOLDER}",
+            f"  Data DGM folder:     {self.DATA_DGM_FOLDER}",
+            f"  Backend DB:          {os.getenv('BACKEND_DB', 'sqlite').lower()}",
+            f"  Admission control:   {admission_control_enabled()}",
+            (
+                f"  Rate limiting:       {rate_limit_enabled()} "
+                f"({self.RATE_LIMIT_TIMES}/{self.RATE_LIMIT_SECONDS}s)"
+            ),
+            f"  Max concurrent jobs: {self.MAX_CONCURRENT_JOBS}",
+            f"  Redis URL:           {self.redis_url}",
+            f"  Log level (console): {self.LOG_LEVEL_CONSOLE}",
+            f"  Log level (file):    {self.LOG_LEVEL_FILE}",
+            f"  Log file enabled:    {self.LOG_FILE_ENABLED}",
+            f"  Log file path:       {self.LOG_FILE_PATH}",
+        ]
+        return "\n".join(lines)
 
 
 # Global settings instance

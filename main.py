@@ -7,6 +7,7 @@ BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
 """
 
 import argparse
+import logging
 import os
 import signal
 import subprocess
@@ -14,6 +15,8 @@ import sys
 import threading
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class CeleryWorkerManager:
@@ -32,11 +35,17 @@ class CeleryWorkerManager:
         try:
             for line in iter(self.worker_process.stdout.readline, ""):
                 if line:
-                    print(f"[CELERY] {line.strip()}")
+                    # The worker process configures the shared logging itself
+                    # (see the Celery ``setup_logging`` hook) and writes to the
+                    # log file directly. Here we only mirror its already
+                    # formatted stdout to this process' stdout so the combined
+                    # output remains visible via ``docker logs``.
+                    sys.stdout.write(f"{line.rstrip()}\n")
+                    sys.stdout.flush()
                 if not self.is_running:
                     break
         except Exception as e:
-            print(f"Error monitoring Celery output: {e}")
+            logger.error("Error monitoring Celery output: %s", e)
 
     def start_worker(self) -> None:
         """
@@ -46,8 +55,7 @@ class CeleryWorkerManager:
             RuntimeError: If the worker fails to start.
         """
         """Start the Celery worker in a separate process"""
-        print("Starting Celery worker...")
-
+        logger.info("Starting Celery worker...")
         # Worker pool and concurrency are configurable via the environment so the
         # number of parallel processing jobs can be tuned per deployment.
         # ``prefork`` uses child processes for real parallelism on CPU-bound IFC
@@ -70,8 +78,7 @@ class CeleryWorkerManager:
             "processing",
         ]
 
-        print(f"Starting Celery with command: {' '.join(cmd)}")
-
+        logger.info("Starting Celery with command: %s", " ".join(cmd))
         self.worker_process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -82,7 +89,7 @@ class CeleryWorkerManager:
         )
 
         self.is_running = True
-        print(f"Celery worker started with PID: {self.worker_process.pid}")
+        logger.info("Celery worker started with PID: %s", self.worker_process.pid)
 
         # Start output monitoring thread
         self.output_thread = threading.Thread(target=self._monitor_output, daemon=True)
@@ -93,19 +100,19 @@ class CeleryWorkerManager:
 
         # Check if the worker is still running
         if self.worker_process.poll() is None:
-            print("Celery worker is running successfully")
+            logger.info("Celery worker is running successfully")
         else:
-            print("Celery worker failed to start")
+            logger.error("Celery worker failed to start")
             self.is_running = False
             # Try to get any error output
             try:
                 stdout, stderr = self.worker_process.communicate(timeout=2)
                 if stdout:
-                    print(f"Celery stdout: {stdout}")
+                    logger.error("Celery stdout: %s", stdout)
                 if stderr:
-                    print(f"Celery stderr: {stderr}")
+                    logger.error("Celery stderr: %s", stderr)
             except Exception as e:
-                print(f"Could not read Celery error output: {e}")
+                logger.error("Could not read Celery error output: %s", e)
 
     def stop_worker(self) -> None:
         """
@@ -113,7 +120,7 @@ class CeleryWorkerManager:
         """
         """Stop the Celery worker process"""
         if self.worker_process and self.is_running:
-            print(f"Stopping Celery worker (PID: {self.worker_process.pid})...")
+            logger.info("Stopping Celery worker (PID: %s)...", self.worker_process.pid)
             self.is_running = False
 
             # Send SIGTERM to gracefully stop the worker
@@ -125,12 +132,14 @@ class CeleryWorkerManager:
             # Wait for the process to terminate
             try:
                 self.worker_process.wait(timeout=10)
-                print("Celery worker stopped successfully")
+                logger.info("Celery worker stopped successfully")
             except subprocess.TimeoutExpired:
-                print("Celery worker didn't stop gracefully, forcing termination...")
+                logger.warning(
+                    "Celery worker didn't stop gracefully, forcing termination..."
+                )
                 self.worker_process.kill()
                 self.worker_process.wait()
-                print("Celery worker force-stopped")
+                logger.info("Celery worker force-stopped")
 
             # Wait for output thread to finish
             if self.output_thread and self.output_thread.is_alive():
@@ -158,7 +167,7 @@ def signal_handler(_signum: int, _frame: Any) -> None:
         _signum: Signal number (unused but required by signal handler signature).
         _frame: Current stack frame (unused but required by signal handler signature).
     """
-    print("\nReceived shutdown signal, stopping services...")
+    logger.info("Received shutdown signal, stopping services...")
     if hasattr(signal_handler, "worker_manager"):
         signal_handler.worker_manager.stop_worker()
     sys.exit(0)
@@ -173,7 +182,11 @@ def main_with_celery(db_type: str) -> None:
     # Set Backend/Broker
     os.environ["BACKEND_DB"] = db_type
 
+    # Configure logging as early as possible in the launcher process.
+    from src.api.config.logging_config import setup_logging
     from src.api.web_app import main
+
+    setup_logging()
 
     # Create worker manager
     worker_manager = CeleryWorkerManager()
@@ -190,23 +203,23 @@ def main_with_celery(db_type: str) -> None:
         worker_manager.start_worker()
 
         if not worker_manager.is_running:
-            print("Failed to start Celery worker. Exiting.")
+            logger.error("Failed to start Celery worker. Exiting.")
             return
 
-        print("\nStarting FastAPI application...")
-        print("=" * 50)
+        logger.info("Starting FastAPI application...")
+        logger.info("=" * 50)
 
         # Start the FastAPI application
         main()
 
     except KeyboardInterrupt:
-        print("\nKeyboard interrupt received")
+        logger.info("Keyboard interrupt received")
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error("Error: %s", e)
     finally:
         # Ensure worker is stopped
         worker_manager.stop_worker()
-        print("All services stopped")
+        logger.info("All services stopped")
 
 
 if __name__ == "__main__":

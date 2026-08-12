@@ -5,10 +5,13 @@ This package contains Celery database configuration and related utilities
 for managing task persistence and job tracking.
 """
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -37,7 +40,7 @@ def get_celery_db_path() -> str:
 def get_celery_config() -> CeleryConfig:
     db_type: Literal["sqlite", "redis"] = str(os.getenv("BACKEND_DB", "sqlite"))
 
-    print(f"DB TYPE set to: {db_type}")
+    logger.info("DB TYPE set to: %s", db_type)
 
     if db_type == "redis":
         # Redis configuration
