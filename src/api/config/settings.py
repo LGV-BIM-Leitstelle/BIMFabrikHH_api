@@ -134,6 +134,44 @@ class APISettings(BaseSettings):
         """
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
+    def config_summary(self) -> str:
+        """Return a human-readable, multi-line summary of the active configuration.
+
+        Intended to be logged once during API initialization so the effective
+        settings (loaded from ``.env`` with defaults) are visible in the logs.
+        """
+        lines = [
+            "BIMFabrikHH API configuration:",
+            f"  Base URL:            {self.BASE_URL}",
+            f"  Server:              {self.API_HOST}:{self.API_PORT}",
+            f"  Trees API:           {self.TREES_API_URL}",
+            f"  Trees Hafen API:     {self.TREES_HAFEN_API_URL}",
+            f"  DGM tiles API:       {self.DGM_TILES_API_URL}",
+            f"  API timeout:         {self.API_TIMEOUT}s",
+            f"  API default limit:   {self.API_DEFAULT_LIMIT}",
+            f"  API default CRS:     {self.API_DEFAULT_CRS}",
+            f"  Output folder:       {self.OUTPUT_FOLDER_PATH}",
+            f"  Output URL (http):   {self.URL_OUTPUT_HTTP}",
+            f"  Output URL (https):  {self.URL_OUTPUT_HTTPS}",
+            f"  Data base URL:       {self.DATA_BASE_URL}",
+            f"  Data LoD1 folder:    {self.DATA_LOD1_FOLDER}",
+            f"  Data LoD2 folder:    {self.DATA_LOD2_FOLDER}",
+            f"  Data DGM folder:     {self.DATA_DGM_FOLDER}",
+            f"  Backend DB:          {os.getenv('BACKEND_DB', 'sqlite').lower()}",
+            f"  Admission control:   {admission_control_enabled()}",
+            (
+                f"  Rate limiting:       {rate_limit_enabled()} "
+                f"({self.RATE_LIMIT_TIMES}/{self.RATE_LIMIT_SECONDS}s)"
+            ),
+            f"  Max concurrent jobs: {self.MAX_CONCURRENT_JOBS}",
+            f"  Redis URL:           {self.redis_url}",
+            f"  Log level (console): {self.LOG_LEVEL_CONSOLE}",
+            f"  Log level (file):    {self.LOG_LEVEL_FILE}",
+            f"  Log file enabled:    {self.LOG_FILE_ENABLED}",
+            f"  Log file path:       {self.LOG_FILE_PATH}",
+        ]
+        return "\n".join(lines)
+
 
 # Global settings instance
 try:

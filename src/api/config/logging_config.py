@@ -110,11 +110,14 @@ def setup_logging(force: bool = False) -> None:
             "handlers": list(handlers.keys()),
         },
         # Route uvicorn's own loggers through the root handlers so that access
-        # and error logs share the same format and destinations.
+        # and error logs share the same format and destinations. The
+        # bimfabrikhh_core entry lets us tune the imported core library's
+        # verbosity independently while still sharing the root handlers.
         "loggers": {
             "uvicorn": {"handlers": [], "level": root_level, "propagate": True},
             "uvicorn.error": {"handlers": [], "level": root_level, "propagate": True},
             "uvicorn.access": {"handlers": [], "level": root_level, "propagate": True},
+            "bimfabrikhh_core": {"handlers": [], "level": "INFO", "propagate": True},
         },
     }
 

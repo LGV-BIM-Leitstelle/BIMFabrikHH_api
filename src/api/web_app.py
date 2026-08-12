@@ -50,6 +50,11 @@ def create_app() -> FastAPI:
     # Ensure logging is configured before anything emits log records.
     setup_logging()
 
+    # Log the effective configuration once at startup.
+    from .config.settings import api_settings
+
+    logger.info(api_settings.config_summary())
+
     # Data API
     data_app = FastAPI(
         title="BIMFabrikHH API", description=app_data_description, version="0.1.0"
@@ -107,8 +112,6 @@ def create_app() -> FastAPI:
 
     # Static files setup for OGC app
     from pathlib import Path
-
-    from .config.settings import api_settings
 
     # Get project root directory (this file is in src/api/)
     project_root = Path(__file__).parent.parent.parent
