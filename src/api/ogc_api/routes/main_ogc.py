@@ -13,9 +13,10 @@ import logging
 
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery.result import AsyncResult
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from src.api.analytics import record_bbox_request
 from src.api.config.settings import admission_control_enabled, api_settings
 from src.api.ogc_api.ogc_metadata.dict_conformance import content_conformance
 from src.api.ogc_api.ogc_metadata.dict_landing_page import content_landing_page
@@ -168,6 +169,7 @@ def get_jobs() -> JSONResponse:
 def execute_process(
     processID: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     inputs: RequestParams = Body(..., embed=True),
 ) -> JSONResponse:
     """
@@ -225,6 +227,21 @@ def execute_process(
         admission.register_job(client_id, jobId)
 
     logger.info("Accepted %s job %s for client %s", processID, jobId, client_id)
+
+    # Record identity-decoupled bounding-box analytics off the request path.
+    # Only the requested extent is stored (no client id, no job id), so the
+    # data cannot be tied to an identifiable person (DSGVO/GDPR).
+    background_tasks.add_task(
+        record_bbox_request,
+        model_type=processID,
+        bbox={
+            "min_x": inputs.bbox.min_x,
+            "min_y": inputs.bbox.min_y,
+            "max_x": inputs.bbox.max_x,
+            "max_y": inputs.bbox.max_y,
+        },
+        use_dgm_elevation=getattr(inputs, "use_dgm_elevation", None),
+    )
 
     # Get base URL from settings
     base_url = str(api_settings.BASE_URL).rstrip("/")

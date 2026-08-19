@@ -33,6 +33,8 @@ uvicorn = "^0.34.0"
 redis = "^5.0"
 fastapi-limiter = "^0.1.6"
 concurrent-log-handler = "^0.9.25"
+prometheus-fastapi-instrumentator = "^7.0.0"
+psycopg = {extras = ["binary"], version = "^3.2"}
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"

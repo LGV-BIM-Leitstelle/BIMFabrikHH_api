@@ -17,6 +17,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.cors import CORSMiddleware
 
 from .config.logging_config import setup_logging
@@ -171,6 +172,15 @@ def create_app() -> FastAPI:
     # Mount sub-apps
     main_app.mount("/data", data_app)
     main_app.mount("/ogc", ogc_app)
+
+    # Expose Prometheus metrics at GET /metrics on the root app. The
+    # instrumentator records request rate, error rate, latency and in-flight
+    # requests per handler/method/status with no per-route code changes.
+    # Prometheus scrapes this endpoint directly over the Docker network
+    # (api:8083/metrics); keep it off the public entrypoint in production.
+    Instrumentator().instrument(main_app).expose(
+        main_app, endpoint="/metrics", include_in_schema=False
+    )
 
     return main_app
 

@@ -74,6 +74,11 @@ class CeleryWorkerManager:
             "--loglevel=info",
             f"--concurrency={worker_concurrency}",
             f"--pool={worker_pool}",
+            # ``-E`` enables sending task-related events (worker_send_task_events)
+            # to the broker. The celery-exporter (monitoring stack) consumes these
+            # events to expose Prometheus metrics (task runtime, success/failure,
+            # active tasks, etc.). Without it the exporter sees no task activity.
+            "-E",
             "-Q",
             "processing",
         ]
