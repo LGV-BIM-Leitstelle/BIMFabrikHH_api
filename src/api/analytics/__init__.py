@@ -1,4 +1,4 @@
-"""Bounding-box request analytics (DSGVO-safe, identity-decoupled).
+"""Bounding-box request analytics.
 
 Public entry point :func:`record_bbox_request` fans one accepted processing
 request out to two sinks:
@@ -9,8 +9,8 @@ request out to two sinks:
   of interest" heatmap in Grafana.
 
 Only the geographic extent is recorded — never the client IP or job id — so the
-data cannot be tied to an identifiable person. All work is best-effort and
-gated behind the ``ENABLE_ANALYTICS`` setting.
+data cannot be tied to an identifiable person. All work is gated behind
+the ``ENABLE_ANALYTICS`` setting.
 """
 
 from __future__ import annotations
@@ -34,9 +34,8 @@ def _area_m2(min_x: float, min_y: float, max_x: float, max_y: float) -> float:
 
     For geographic input (SRID 4326, lon/lat degrees) an equirectangular
     approximation at the box's mean latitude is used — accurate to well within
-    1% for city-scale boxes, which is ample for a metrics histogram. For a
-    projected (metric) SRID the extent is already in meters, so the planar
-    product is exact.
+    1% for city-scale boxes. For a projected (metric) SRID the extent
+    is already in meters, so the planar product is exact.
     """
     if int(api_settings.ANALYTICS_BBOX_SRID) == _WGS84_SRID:
         mean_lat = math.radians((min_y + max_y) / 2.0)
