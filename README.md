@@ -260,6 +260,87 @@ The API uses SQLite as the default Celery result backend (no Redis required). Da
 
 See `env.example` for all available settings.
 
+## Monitoring & Observability
+
+The application is observability-ready: it exposes the standard interfaces a
+production monitoring system needs — a Prometheus `/metrics` endpoint (request
+rate, error rate, latency, in-flight requests, plus optional request-analytics
+counters) and structured container logs on stdout/stderr. This means you can
+plug it into a full metrics, logs and dashboards stack without changing any
+application code.
+
+The monitoring layer is intentionally kept separate from the app deployment. The diagram below is a suggested reference architecturethat can be implemented with a `docker-compose` overlay of off-the-shelf, open-source components:
+
+```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 60, "rankSpacing": 90, "htmlLabels": true}, "themeVariables": {"fontSize": "18px"}}}%%
+flowchart LR
+    subgraph sources["Sources — application stack"]
+        direction TB
+        API["FastAPI API<br/>/metrics endpoint"]
+        WORKER["Celery worker<br/>(task events)"]
+        REDIS["Redis<br/>broker + backend"]
+        HOST["Host / VM<br/>(CPU, mem, disk)"]
+        CONTAINERS["All containers<br/>(cgroups)"]
+        DOCKER["Container logs<br/>(stdout/stderr)"]
+    end
+
+    subgraph collectors["Collectors / exporters"]
+        direction TB
+        CEEXP["celery-exporter"]
+        NODEEXP["node-exporter"]
+        CADV["cAdvisor"]
+        REDISEXP["redis-exporter"]
+        ALLOY["Grafana Alloy<br/>log collector"]
+    end
+
+    subgraph storage["Storage"]
+        direction TB
+        PROM["Prometheus<br/>metrics TSDB"]
+        LOKI["Loki<br/>log store"]
+        PG["PostGIS<br/>analytics store"]
+    end
+
+    GRAF["Grafana<br/>dashboards"]
+
+    %% exporter / collector sources
+    WORKER -->|emit events| REDIS
+    CEEXP -->|task events| REDIS
+    REDISEXP -->|INFO| REDIS
+    NODEEXP -->|/proc /sys| HOST
+    CADV -->|cgroups| CONTAINERS
+    ALLOY -->|tail| DOCKER
+
+    %% metrics scraping (pull)
+    PROM -->|scrape /metrics| API
+    PROM -->|scrape| CEEXP
+    PROM -->|scrape| NODEEXP
+    PROM -->|scrape| CADV
+    PROM -->|scrape| REDISEXP
+    PROM -->|scrape| ALLOY
+
+    %% logs + analytics
+    ALLOY -->|push| LOKI
+    API -->|bbox events| PG
+
+    %% grafana reads
+    GRAF -->|PromQL| PROM
+    GRAF -->|LogQL| LOKI
+    GRAF -->|SQL geomap| PG
+
+    classDef store fill:#e6f0ff,stroke:#3366cc,stroke-width:1px;
+    classDef viz fill:#fff2e6,stroke:#cc7a00,stroke-width:1px;
+    class PROM,LOKI,PG store;
+    class GRAF viz;
+```
+
+**Suggested components:**
+
+- **Prometheus** — scrapes the app's `/metrics` and all exporters; stores time series.
+- **Grafana** — dashboards and alerting over metrics, logs and analytics.
+- **celery-exporter / node-exporter / cAdvisor / redis-exporter** — expose task, host, per-container and Redis metrics to Prometheus.
+- **Grafana Alloy + Loki** — collect container logs and make them queryable in Grafana.
+- **PostGIS** *(optional)* — stores identity-decoupled request KPIs for usage analytics and geomaps.
+
 ## Development
 
 ### Project Structure
