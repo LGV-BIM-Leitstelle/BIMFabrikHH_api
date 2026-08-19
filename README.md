@@ -269,7 +269,7 @@ counters) and structured container logs on stdout/stderr. This means you can
 plug it into a full metrics, logs and dashboards stack without changing any
 application code.
 
-The monitoring layer is intentionally kept separate from the app deployment. The diagram below is a suggested reference architecturethat can be implemented with a `docker-compose` overlay of off-the-shelf, open-source components:
+The monitoring layer is intentionally kept separate from the app deployment. The diagram below is a suggested reference architecture that can be implemented with a `docker-compose` overlay of off-the-shelf, open-source components:
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 60, "rankSpacing": 90, "htmlLabels": true}, "themeVariables": {"fontSize": "18px"}}}%%
