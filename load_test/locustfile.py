@@ -14,8 +14,10 @@ picking one of the configured processes (``generate-tree-model``,
 
 The bounding box is drawn per request from a distribution anchored on a fixed
 central-Hamburg point (see ``_random_bbox``): a Gaussian-jittered center and
-log-normal width/height. Set the module-level ``RANDOMIZE_BBOX`` flag to False
-to send the fixed anchor box on every request instead.
+log-normal width/height. The base box size is controlled by its ground area,
+exposed as the ``--base-area-km2`` parameter (CLI and web UI); the width:height
+aspect ratio is held constant. Set the module-level ``RANDOMIZE_BBOX`` flag to
+False to send the fixed anchor box on every request instead.
 
 Admission control
 -----------------
@@ -54,7 +56,7 @@ import math
 import random
 import time
 
-from locust import FastHttpUser, between, task
+from locust import FastHttpUser, between, events, task
 
 # --- Configuration -----------------------------------------------------------
 
@@ -91,9 +93,18 @@ RANDOMIZE_BBOX = True
 CENTER_MEAN_LON = 9.992790
 CENTER_MEAN_LAT = 53.550603
 
-# Original box extents in degrees, used as the median of the size distributions.
-BASE_WIDTH_DEG = 0.0033  # lon extent, ~218 m at this latitude
-BASE_HEIGHT_DEG = 0.0014  # lat extent, ~156 m
+# Base box size.
+#
+# The base bounding box is described by its ground AREA (km²) plus a fixed
+# width:height aspect ratio. The area is the median of the size distributions
+# and is exposed as a custom Locust parameter (``--base-area-km2``), so it can
+# be set on the CLI or in the web UI. The aspect ratio is held constant so the
+# box keeps a natural rectangular shape as the area changes.
+#
+# The default area and the aspect ratio reproduce the original hard-coded box
+# (~218 m x ~156 m => ~0.034 km², width:height ~1.40) at the anchor latitude.
+DEFAULT_BASE_AREA_KM2 = 0.034
+BASE_ASPECT_RATIO = 1.40  # base width (lon) / base height (lat), in meters
 
 # Center: standard deviation of the Gaussian jitter, in meters (isotropic).
 CENTER_SIGMA_METERS = 1000.0
@@ -110,13 +121,39 @@ _METERS_PER_DEG_LAT = 111_320.0
 _METERS_PER_DEG_LON = 111_320.0 * math.cos(math.radians(CENTER_MEAN_LAT))
 
 
-def _random_bbox() -> dict:
+@events.init_command_line_parser.add_listener
+def _add_base_area_argument(parser) -> None:
+    """Expose the base bbox area (km²) as a CLI and web-UI parameter."""
+    parser.add_argument(
+        "--base-area-km2",
+        type=float,
+        default=DEFAULT_BASE_AREA_KM2,
+        env_var="LOCUST_BASE_AREA_KM2",
+        help="Base bounding box ground area in km² (median of the size distributions).",
+        include_in_web_ui=True,
+    )
+
+
+def _base_dims_deg(area_km2: float) -> tuple[float, float]:
+    """Convert a ground area (km²) into base width/height extents in degrees.
+
+    The area is split into width and height using the fixed ``BASE_ASPECT_RATIO``
+    (width:height, in meters), then each meter extent is converted to degrees at
+    the anchor latitude.
+    """
+    area_m2 = area_km2 * 1_000_000.0
+    width_m = math.sqrt(area_m2 * BASE_ASPECT_RATIO)
+    height_m = math.sqrt(area_m2 / BASE_ASPECT_RATIO)
+    return width_m / _METERS_PER_DEG_LON, height_m / _METERS_PER_DEG_LAT
+
+
+def _random_bbox(base_width_deg: float, base_height_deg: float) -> dict:
     """Draw a randomized bounding box around the central Hamburg anchor.
 
     The center point is jittered with an isotropic Gaussian (defined in meters),
     and the width/height are drawn independently from log-normal distributions
-    whose median equals the original box extent. The box is reconstructed from
-    the sampled center and size, guaranteeing ``min < max``.
+    whose median equals the base box extent. The box is reconstructed from the
+    sampled center and size, guaranteeing ``min < max``.
     """
     # Center: Gaussian jitter in meters, converted to degrees per axis.
     center_lon = (
@@ -127,16 +164,16 @@ def _random_bbox() -> dict:
     )
 
     # Size: log-normal with median anchored to the base dimension.
-    width = random.lognormvariate(math.log(BASE_WIDTH_DEG), SIZE_LOG_SIGMA)
-    height = random.lognormvariate(math.log(BASE_HEIGHT_DEG), SIZE_LOG_SIGMA)
+    width = random.lognormvariate(math.log(base_width_deg), SIZE_LOG_SIGMA)
+    height = random.lognormvariate(math.log(base_height_deg), SIZE_LOG_SIGMA)
 
     # Clamp to a sane multiplicative range of the base dimension.
     width = min(
-        max(width, BASE_WIDTH_DEG * SIZE_MIN_FACTOR), BASE_WIDTH_DEG * SIZE_MAX_FACTOR
+        max(width, base_width_deg * SIZE_MIN_FACTOR), base_width_deg * SIZE_MAX_FACTOR
     )
     height = min(
-        max(height, BASE_HEIGHT_DEG * SIZE_MIN_FACTOR),
-        BASE_HEIGHT_DEG * SIZE_MAX_FACTOR,
+        max(height, base_height_deg * SIZE_MIN_FACTOR),
+        base_height_deg * SIZE_MAX_FACTOR,
     )
 
     return {
@@ -147,19 +184,23 @@ def _random_bbox() -> dict:
     }
 
 
-def _fixed_bbox() -> dict:
+def _fixed_bbox(base_width_deg: float, base_height_deg: float) -> dict:
     """Return the deterministic anchor box (anchor as lower-left corner)."""
     return {
         "min_x": CENTER_MEAN_LON,
         "min_y": CENTER_MEAN_LAT,
-        "max_x": CENTER_MEAN_LON + BASE_WIDTH_DEG,
-        "max_y": CENTER_MEAN_LAT + BASE_HEIGHT_DEG,
+        "max_x": CENTER_MEAN_LON + base_width_deg,
+        "max_y": CENTER_MEAN_LAT + base_height_deg,
     }
 
 
-def _make_bbox() -> dict:
+def _make_bbox(base_width_deg: float, base_height_deg: float) -> dict:
     """Return a randomized or fixed bounding box per ``RANDOMIZE_BBOX``."""
-    return _random_bbox() if RANDOMIZE_BBOX else _fixed_bbox()
+    return (
+        _random_bbox(base_width_deg, base_height_deg)
+        if RANDOMIZE_BBOX
+        else _fixed_bbox(base_width_deg, base_height_deg)
+    )
 
 
 # Job polling behaviour.
@@ -199,11 +240,11 @@ def _next_forwarded_ip() -> str:
     return f"100.{64 + octet_c}.{octet_a}.{octet_b}"
 
 
-def _build_inputs_payload() -> dict:
+def _build_inputs_payload(base_width_deg: float, base_height_deg: float) -> dict:
     """Build the OGC execution request body for the tree-model process."""
     return {
         "inputs": {
-            "bbox": _make_bbox(),
+            "bbox": _make_bbox(base_width_deg, base_height_deg),
             "containers": [
                 {
                     "containerTitle": "Load Test Container",
@@ -229,6 +270,10 @@ class OGCProcessUser(FastHttpUser):
     def on_start(self) -> None:
         """Assign a unique client identity and build reusable headers."""
         self.forwarded_ip = _next_forwarded_ip()
+        # Resolve the base box extents from the configured area (CLI/web UI).
+        self.base_width_deg, self.base_height_deg = _base_dims_deg(
+            self.environment.parsed_options.base_area_km2
+        )
         self.headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -257,7 +302,7 @@ class OGCProcessUser(FastHttpUser):
         with self.client.request(
             "POST",
             f"/ogc/processes/{process_id}/execution",
-            json=_build_inputs_payload(),
+            json=_build_inputs_payload(self.base_width_deg, self.base_height_deg),
             headers=self.headers,
             name=_name_execute(process_id),
             catch_response=True,
