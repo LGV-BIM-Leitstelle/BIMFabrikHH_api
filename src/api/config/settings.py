@@ -113,6 +113,22 @@ class APISettings(BaseSettings):
     # Admission control - concurrent jobs per client identifier
     MAX_CONCURRENT_JOBS: int = 2
 
+    # Request analytics (bounding-box KPIs) -> dedicated monitoring PostGIS DB.
+    # Opt-in and fully identity-decoupled: only the requested extent is stored,
+    # never the client IP or job id (see src/api/analytics/).
+    ENABLE_ANALYTICS: bool = False
+    ANALYTICS_DB_HOST: str = "localhost"
+    ANALYTICS_DB_PORT: int = 5432
+    ANALYTICS_DB_NAME: str = "analytics"
+    ANALYTICS_DB_USER: str = "analytics"
+    ANALYTICS_DB_PASSWORD: str = "analytics"
+    # Retention window (days) for the analytics_bbox table; matches Prometheus/Loki.
+    ANALYTICS_RETENTION_DAYS: int = 15
+    # SRID of the incoming bbox coordinates (WGS84 lon/lat degrees in practice)
+    # and the metric SRID used only to reason about areas.
+    ANALYTICS_BBOX_SRID: int = 4326
+    ANALYTICS_AREA_SRID: int = 25832
+
     # Logging configuration
     # Per-handler log levels (console and file handlers can differ).
     LOG_LEVEL_CONSOLE: str = "INFO"
@@ -133,6 +149,18 @@ class APISettings(BaseSettings):
         Built from the individual host/port/db settings.
         """
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+    @property
+    def analytics_db_url(self) -> str:
+        """Return the SQLAlchemy URL for the dedicated analytics PostGIS DB.
+
+        Uses the psycopg (v3) driver. Independent from the Celery result
+        backend; only the request-analytics module connects here.
+        """
+        return (
+            f"postgresql+psycopg://{self.ANALYTICS_DB_USER}:{self.ANALYTICS_DB_PASSWORD}"
+            f"@{self.ANALYTICS_DB_HOST}:{self.ANALYTICS_DB_PORT}/{self.ANALYTICS_DB_NAME}"
+        )
 
     @property
     def output_folder_abs_path(self) -> str:
@@ -174,6 +202,11 @@ class APISettings(BaseSettings):
             ),
             f"  Max concurrent jobs: {self.MAX_CONCURRENT_JOBS}",
             f"  Redis URL:           {self.redis_url}",
+            f"  Analytics enabled:   {self.ENABLE_ANALYTICS}",
+            (
+                f"  Analytics DB:        "
+                f"{self.ANALYTICS_DB_HOST}:{self.ANALYTICS_DB_PORT}/{self.ANALYTICS_DB_NAME}"
+            ),
             f"  Log level (console): {self.LOG_LEVEL_CONSOLE}",
             f"  Log level (file):    {self.LOG_LEVEL_FILE}",
             f"  Log file enabled:    {self.LOG_FILE_ENABLED}",
