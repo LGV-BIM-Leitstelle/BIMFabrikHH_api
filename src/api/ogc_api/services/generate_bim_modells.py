@@ -337,7 +337,9 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         self.update_state(state="PROGRESS", meta={"percent": 50})
 
         # Transform file names if needed
-        transformed_gml_files = transform_file_names_for_lod(gml_files, lod_level)
+        transformed_gml_files = transform_file_names_for_lod(
+            gml_files, lod_level, folder_url
+        )
         logger.info(f"Using CityGML tiles: {transformed_gml_files}")
 
         # Generate output path for API's output folder
