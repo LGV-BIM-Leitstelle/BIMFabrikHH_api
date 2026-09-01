@@ -4,13 +4,17 @@ LoD utility functions for OGC API.
 Hamburg CityGML tile names and local folder resolution for LoD1–3.
 """
 
+import os
 import re
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from BIMFabrikHH_core.config.paths import existing_local_dir
 
 from src.api.config.settings import api_settings
+
+# Extensions accepted for CityGML tiles, in resolution priority order.
+CITYGML_EXTENSIONS = (".gml", ".xml")
 
 _LOD1_TILE = re.compile(r"^LoD1_32_(\d+)_(\d+)_", re.IGNORECASE)
 
@@ -50,16 +54,28 @@ def _lod3_citygrid_name(lod1_name: str) -> str:
     return f"{east_km - 500:02d}{north_km - 5900:02d}.gml"
 
 
-def transform_file_names_for_lod(tile_names: List[str], lod_level: int) -> List[str]:
+def transform_file_names_for_lod(
+    tile_names: List[str],
+    lod_level: int,
+    folder_path: Optional[str] = None,
+) -> List[str]:
     """
     Transform file names to match the LoD level being used.
 
     Tile fetch always returns LoD1 DK5 names. LoD2 keeps that pattern with a
     prefix swap. LoD3 CityGRID tiles are ``{east-500}{north-5900}.gml``.
 
+    Hamburg's tiles are stored with either a ``.xml`` or ``.gml`` extension
+    When ``folder_path`` is a local directory, each tile is resolved to whichever
+    extension actually exists on disk, so both extensions are accepted for
+    both LoD levels.
+
     Args:
         tile_names: List of tile file names (e.g., ['LoD1_32_567_5934_1_HH.xml'])
         lod_level: The target LoD level (1, 2, or 3)
+        folder_path: Optional directory (local path or URL) holding the tiles.
+            When a local path is given, the file extension is resolved to the
+            file that exists (``.gml`` or ``.xml``).
 
     Returns:
         List of transformed file names
@@ -81,7 +97,34 @@ def transform_file_names_for_lod(tile_names: List[str], lod_level: int) -> List[
                 transformed_names.append(name.replace("LoD1_", "LoD2_"))
             else:
                 transformed_names.append(name)
-        return transformed_names
-    if lod_level == 3:
-        return [_lod3_citygrid_name(name) for name in tile_names]
-    return tile_names
+    elif lod_level == 3:
+        transformed_names = [_lod3_citygrid_name(name) for name in tile_names]
+    else:
+        transformed_names = list(tile_names)
+
+    return _resolve_tile_extensions(transformed_names, folder_path)
+
+
+def _resolve_tile_extensions(
+    tile_names: List[str], folder_path: Optional[str]
+) -> List[str]:
+    """
+    Resolve each tile file name to an extension that exists in the folder.
+
+    Both ``.gml`` and ``.xml`` are accepted. Remote (http/https) folders and
+    names for which no matching file is found are returned unchanged, so the
+    caller can surface a proper "not found" error.
+    """
+    if not folder_path or folder_path.startswith(("http://", "https://")):
+        return tile_names
+
+    resolved = []
+    for name in tile_names:
+        base, _ext = os.path.splitext(name)
+        candidate = name
+        for ext in CITYGML_EXTENSIONS:
+            if os.path.isfile(os.path.join(folder_path, base + ext)):
+                candidate = base + ext
+                break
+        resolved.append(candidate)
+    return resolved

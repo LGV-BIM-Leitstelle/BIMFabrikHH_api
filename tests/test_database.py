@@ -18,18 +18,12 @@ from unittest.mock import patch
 
 import pytest
 
-from src.database import (
-    CELERY_BACKEND_URL,
-    CELERY_BROKER_URL,
-    CELERY_DB_PATH,
-    DATABASE_DIR,
-)
+from src.database import get_celery_config, get_celery_db_path
 from src.database.db_utils import (
     backup_database,
     cleanup_old_database,
     get_database_info,
 )
-
 
 # ============================================================================
 # Fixtures
@@ -50,8 +44,7 @@ def temp_db_with_schema(temp_db_path):
     cursor = conn.cursor()
 
     # Create main Celery table
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE celery_taskmeta (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task_id VARCHAR(155) UNIQUE,
@@ -60,8 +53,7 @@ def temp_db_with_schema(temp_db_path):
             date_done TIMESTAMP,
             traceback TEXT
         )
-    """
-    )
+    """)
 
     conn.commit()
     conn.close()
@@ -101,16 +93,31 @@ def temp_db_with_tasks(temp_db_with_schema):
 class TestDatabaseConfiguration:
     """Test basic database configuration."""
 
-    def test_database_paths_are_set(self):
-        """Test that database paths are configured."""
-        assert DATABASE_DIR is not None
-        assert CELERY_DB_PATH is not None
-        assert CELERY_DB_PATH.endswith(".sqlite")
+    def test_database_path_is_set(self):
+        """Test that the SQLite database path is configured."""
+        db_path = get_celery_db_path()
+        assert db_path is not None
+        assert db_path.endswith(".sqlite")
 
-    def test_connection_urls_format(self):
-        """Test that connection URLs have correct format."""
-        assert CELERY_BROKER_URL.startswith("sqla+sqlite:///")
-        assert CELERY_BACKEND_URL.startswith("db+sqlite:///")
+    def test_sqlite_connection_urls_format(self, monkeypatch):
+        """Test that the SQLite backend produces correctly formatted URLs."""
+        monkeypatch.setenv("BACKEND_DB", "sqlite")
+        config = get_celery_config()
+        assert config.broker_url.startswith("sqla+sqlite:///")
+        assert config.backend_url.startswith("db+sqlite:///")
+
+    def test_redis_connection_urls_format(self, monkeypatch):
+        """Test that the Redis backend produces correctly formatted URLs."""
+        monkeypatch.setenv("BACKEND_DB", "redis")
+        monkeypatch.setenv("REDIS_HOST", "localhost")
+        monkeypatch.setenv("REDIS_PORT", "6379")
+        monkeypatch.setenv("REDIS_DB", "0")
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        config = get_celery_config()
+        assert config.broker_url.startswith("redis://")
+        assert config.backend_url.startswith("redis://")
+        # Redis uses a single instance for both broker and backend
+        assert config.broker_url == config.backend_url
 
 
 # ============================================================================
@@ -125,12 +132,12 @@ class TestBasicOperations:
         """Test creating a database connection."""
         conn = sqlite3.connect(temp_db_path)
         assert conn is not None
-        
+
         cursor = conn.cursor()
         cursor.execute("SELECT sqlite_version()")
         version = cursor.fetchone()
         assert version is not None
-        
+
         conn.close()
 
     def test_insert_and_retrieve_task(self, temp_db_with_schema):
@@ -147,7 +154,9 @@ class TestBasicOperations:
         conn.commit()
 
         # Retrieve task
-        cursor.execute("SELECT status, result FROM celery_taskmeta WHERE task_id = ?", (task_id,))
+        cursor.execute(
+            "SELECT status, result FROM celery_taskmeta WHERE task_id = ?", (task_id,)
+        )
         status, result = cursor.fetchone()
 
         assert status == "SUCCESS"
@@ -168,7 +177,9 @@ class TestBasicOperations:
         conn.commit()
 
         # Verify update
-        cursor.execute("SELECT status FROM celery_taskmeta WHERE task_id = ?", ("task-3",))
+        cursor.execute(
+            "SELECT status FROM celery_taskmeta WHERE task_id = ?", ("task-3",)
+        )
         status = cursor.fetchone()[0]
         assert status == "SUCCESS"
 
@@ -231,13 +242,11 @@ class TestDatabaseQueries:
         conn = sqlite3.connect(temp_db_with_tasks)
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT task_id FROM celery_taskmeta 
             ORDER BY date_done DESC 
             LIMIT 2
-        """
-        )
+        """)
         recent = cursor.fetchall()
 
         assert len(recent) == 2
@@ -273,7 +282,7 @@ class TestDatabaseUtilities:
 
             assert os.path.exists(result)
             assert result == str(backup_path)
-            
+
             # Verify backup has same data
             conn = sqlite3.connect(result)
             cursor = conn.cursor()
@@ -297,7 +306,9 @@ class TestDatabaseUtilities:
             assert count == 2
 
             # Verify they are the most recent
-            cursor.execute("SELECT task_id FROM celery_taskmeta ORDER BY date_done DESC")
+            cursor.execute(
+                "SELECT task_id FROM celery_taskmeta ORDER BY date_done DESC"
+            )
             remaining = [row[0] for row in cursor.fetchall()]
             assert "task-5" in remaining
             assert "task-4" in remaining
@@ -385,7 +396,7 @@ class TestDatabaseIntegrity:
         conn.close()
 
         final_size = os.path.getsize(temp_db_with_tasks)
-        
+
         # Size should not increase
         assert final_size <= initial_size
 

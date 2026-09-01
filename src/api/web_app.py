@@ -6,16 +6,22 @@ combining both data API and OGC API services. It sets up the application
 with proper middleware, routing, and static file serving.
 
 Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung
-BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
+BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>, Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>
 """
 
+import logging
 import os
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.cors import CORSMiddleware
 
+from .config.logging_config import setup_logging
+from .config.settings import rate_limit_enabled
 from .data_api.oaf_endpoints import router as oaf_router
 from .ogc_api.ogc_metadata.app_info import (
     app_contact,
@@ -24,6 +30,9 @@ from .ogc_api.ogc_metadata.app_info import (
     app_ogc_description,
 )
 from .ogc_api.routes.main_ogc import router_ogc
+from .ogc_api.services.rate_limit import close_rate_limiter, init_rate_limiter
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -39,8 +48,18 @@ def create_app() -> FastAPI:
     Raises:
         RuntimeError: If required directories (output, static) do not exist.
     """
+    # Ensure logging is configured before anything emits log records.
+    setup_logging()
+
+    # Log the effective configuration once at startup.
+    from .config.settings import api_settings
+
+    logger.info(api_settings.config_summary())
+
     # Data API
-    data_app = FastAPI(title="BIMFabrikHH API", description=app_data_description, version="0.1.0")
+    data_app = FastAPI(
+        title="BIMFabrikHH API", description=app_data_description, version="0.1.0"
+    )
 
     # OGC API Processes
     ogc_app = FastAPI(
@@ -65,10 +84,36 @@ def create_app() -> FastAPI:
     data_app.include_router(oaf_router)
     ogc_app.include_router(router_ogc)
 
+    # Lifespan context manager for rate limiter
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        """Manage startup and shutdown of the rate limiter.
+
+        The Redis-backed rate limiter is only initialized when rate limiting is
+        enabled (Redis backend *and* ``ENABLE_RATE_LIMIT`` set); otherwise it is
+        skipped and the rate limit dependency self-disables. The per-client
+        concurrency limit is unaffected and runs independently.
+        """
+        # --- startup ---
+        if rate_limit_enabled():
+            try:
+                await init_rate_limiter()
+            except Exception as e:  # pragma: no cover - defensive startup logging
+                logger.error("Error initializing rate limiter: %s", e)
+        else:
+            logger.info("Rate limiting disabled; skipping rate limiter init")
+
+        yield
+
+        # --- shutdown ---
+        try:
+            await close_rate_limiter()
+        except Exception as e:  # pragma: no cover - defensive shutdown logging
+            logger.error("Error closing rate limiter: %s", e)
+
     # Static files setup for OGC app
-    from .config.settings import api_settings
     from pathlib import Path
-    
+
     # Get project root directory (this file is in src/api/)
     project_root = Path(__file__).parent.parent.parent
     output_dir = project_root / api_settings.OUTPUT_FOLDER_PATH
@@ -87,6 +132,7 @@ def create_app() -> FastAPI:
         title="BIMFabrikHH API",
         description="Combined API with Data and OGC services",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     # Add CORS to main app
@@ -101,15 +147,15 @@ def create_app() -> FastAPI:
     # Mount static files on main app
     try:
         main_app.mount("/output", StaticFiles(directory=str(output_dir)), name="output")
-        print(f"Mounted output files successfully from: {output_dir}")
+        logger.info("Mounted output files successfully from: %s", output_dir)
     except Exception as e:
-        print(f"Error mounting output directory: {e}")
+        logger.error("Error mounting output directory: %s", e)
 
     try:
         main_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-        print(f"Mounted static files successfully from: {static_dir}")
+        logger.info("Mounted static files successfully from: %s", static_dir)
     except Exception as e:
-        print(f"Error mounting static directory: {e}")
+        logger.error("Error mounting static directory: %s", e)
 
     @main_app.get("/", response_class=HTMLResponse)
     async def custom_root() -> HTMLResponse:
@@ -127,6 +173,15 @@ def create_app() -> FastAPI:
     main_app.mount("/data", data_app)
     main_app.mount("/ogc", ogc_app)
 
+    # Expose Prometheus metrics at GET /metrics on the root app. The
+    # instrumentator records request rate, error rate, latency and in-flight
+    # requests per handler/method/status with no per-route code changes.
+    # Prometheus scrapes this endpoint directly over the Docker network
+    # (api:8083/metrics); keep it off the public entrypoint in production.
+    Instrumentator().instrument(main_app).expose(
+        main_app, endpoint="/metrics", include_in_schema=False
+    )
+
     return main_app
 
 
@@ -139,23 +194,29 @@ def main() -> None:
     by the main application launcher.
     """
     import uvicorn
+
     from .config.settings import api_settings
+
+    # Configure logging before uvicorn starts so its loggers use our config.
+    setup_logging()
 
     # Get configuration from settings (which loads from .env)
     port = int(api_settings.API_PORT)
     host = api_settings.API_HOST
-    
+
     # Override host for Docker containers
     if os.getenv("DOCKER_CONTAINER", "false").lower() == "true":
         host = "0.0.0.0"
 
-    print("Starting BIMFabrikHH API...")
-    print(f"Server will run on: http://{host}:{port}")
-    print(f"Data API docs: http://{host}:{port}/data/docs")
-    print(f"OGC API docs: http://{host}:{port}/ogc/docs")
+    logger.info("Starting BIMFabrikHH API...")
+    logger.info("Server will run on: http://%s:%s", host, port)
+    logger.info("Data API docs: http://%s:%s/data/docs", host, port)
+    logger.info("OGC API docs: http://%s:%s/ogc/docs", host, port)
 
     app = create_app()
-    uvicorn.run(app, host=host, port=port)
+    # Pass log_config=None so uvicorn keeps our root logging configuration
+    # instead of installing its own.
+    uvicorn.run(app, host=host, port=port, log_config=None)
 
 
 if __name__ == "__main__":

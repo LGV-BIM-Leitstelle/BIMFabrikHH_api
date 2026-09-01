@@ -9,16 +9,21 @@ BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
 """
 
 import datetime
+import logging
 
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery.result import AsyncResult
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from src.api.analytics import record_bbox_request
+from src.api.config.settings import admission_control_enabled, api_settings
 from src.api.ogc_api.ogc_metadata.dict_conformance import content_conformance
 from src.api.ogc_api.ogc_metadata.dict_landing_page import content_landing_page
 from src.api.ogc_api.ogc_metadata.dict_processes import content_get_processes
 from src.api.ogc_api.ogc_metadata.process_definitions import PROCESS_DEFINITIONS
+from src.api.ogc_api.services.admission_controller import get_admission_controller
+from src.api.ogc_api.services.client_identity import get_client_identifier
 from src.api.ogc_api.services.generate_bim_modells import (
     app,
     execute_generate_city_model,
@@ -28,9 +33,11 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_tree_model,
     execute_generate_tree_model_rs,
 )
-from src.api.config.settings import api_settings
+from src.api.ogc_api.services.rate_limit import execution_rate_limit
 
 router_ogc = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 PROCESS_TASKS = {
@@ -155,33 +162,78 @@ def get_jobs() -> JSONResponse:
     status_code=201,
     summary="Execute Process",
     description="Executes a specified process with provided input parameters and creates a job.",
+    dependencies=[Depends(execution_rate_limit)],
 )
 def execute_process(
-    processID: str, inputs: RequestParams = Body(..., embed=True)
+    processID: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    inputs: RequestParams = Body(..., embed=True),
 ) -> JSONResponse:
     """
     Execute a specified OGC process with provided input parameters.
 
+    Admission control is enforced in two stages: a per-client rate limit
+    (handled by the ``execution_rate_limit`` dependency) and a per-client
+    concurrent-job limit (handled by the admission controller). The router only
+    resolves the client identifier, asks the admission controller for capacity,
+    submits the Celery task, and registers it.
+
     Args:
         processID: Identifier of the process to execute.
+        request: The incoming request, used to resolve the client identifier.
         inputs: Input parameters for the process.
 
     Returns:
         JSONResponse: Job information including ID and status.
 
     Raises:
-        HTTPException: If the process is not found.
+        HTTPException: 404 if the process is not found, 429 if the client's
+            concurrent-job limit has been reached.
     """
     task_fn = PROCESS_TASKS.get(processID)
     if task_fn is None:
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")
 
+    # Determine the client identifier.
+    client_id = get_client_identifier(request)
+
+    # Ask the admission controller whether a new job may be accepted
+    # (raises HTTP 429 if the concurrent-job limit is reached). Admission
+    # control only runs in production mode (Redis backend); it is skipped for
+    # the sqlite/local backend.
+    admission = get_admission_controller() if admission_control_enabled() else None
+    if admission is not None:
+        admission.ensure_capacity(client_id)
+
     task = task_fn.delay(inputs.model_dump())
 
     jobId = task.id
 
+    # Register the submitted task with the admission controller so the
+    # concurrency slot is tracked until a Celery lifecycle hook releases it.
+    if admission is not None:
+        admission.register_job(client_id, jobId)
+
+    logger.info("Accepted %s job %s for client %s", processID, jobId, client_id)
+
+    # Record identity-decoupled bounding-box analytics off the request path.
+    # Only the requested extent is stored (no client id, no job id), so the
+    # data cannot be tied to an identifiable person (DSGVO/GDPR).
+    background_tasks.add_task(
+        record_bbox_request,
+        model_type=processID,
+        bbox={
+            "min_x": inputs.bbox.min_x,
+            "min_y": inputs.bbox.min_y,
+            "max_x": inputs.bbox.max_x,
+            "max_y": inputs.bbox.max_y,
+        },
+        use_dgm_elevation=getattr(inputs, "use_dgm_elevation", None),
+    )
+
     # Get base URL from settings
-    base_url = str(api_settings.BASE_URL).rstrip('/')
+    base_url = str(api_settings.BASE_URL).rstrip("/")
 
     return JSONResponse(
         status_code=201,
@@ -263,6 +315,7 @@ def cancel_job(jobId: str) -> JSONResponse:
     job = AsyncResult(jobId, app=app)
     if job.state in ["PENDING", "STARTED"]:
         job.revoke(terminate=True)
+        logger.info("Cancelled job %s", jobId)
         return JSONResponse(content={"message": "Job cancelled"})
     else:
         raise HTTPException(status_code=400, detail="Job cannot be cancelled")
@@ -301,6 +354,7 @@ def get_job_results(jobId: str) -> JSONResponse:
         else:
             raise HTTPException(status_code=404, detail="No model data found in result")
     elif job.state == "FAILURE":
+        logger.error("Results requested for failed job %s: %s", jobId, job.info)
         raise HTTPException(status_code=500, detail=f"Job failed: {job.info}")
     else:
         raise HTTPException(status_code=404, detail="Job not found or not completed")

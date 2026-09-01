@@ -31,6 +31,10 @@ bimfabrikhh-core = { git = "https://github.com/LGV-BIM-Leitstelle/BIMFabrikHH_co
 sqlalchemy = "^2.0.44"
 uvicorn = "^0.34.0"
 redis = "^5.0"
+fastapi-limiter = "^0.1.6"
+concurrent-log-handler = "^0.9.25"
+prometheus-fastapi-instrumentator = "^7.0.0"
+psycopg = {extras = ["binary"], version = "^3.2"}
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
@@ -38,6 +42,7 @@ httpx = "^0.28.0"
 pytest = "^8.4.1"
 pytest-cov = "^6.0.0"
 ipykernel = "*"
+locust = "*"
 
 [build-system]
 requires = ["poetry-core"]
