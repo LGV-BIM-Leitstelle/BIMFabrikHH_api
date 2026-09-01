@@ -60,8 +60,14 @@ class CeleryWorkerManager:
         # number of parallel processing jobs can be tuned per deployment.
         # ``prefork`` uses child processes for real parallelism on CPU-bound IFC
         # generation; ``CELERY_WORKER_CONCURRENCY`` sets how many run in parallel.
-        worker_pool = os.getenv("CELERY_WORKER_POOL", "prefork")
-        worker_concurrency = os.getenv("CELERY_WORKER_CONCURRENCY", "2")
+        # Windows cannot use billiard prefork/spawn reliably (WinError 6).
+        # Always solo/1 on nt so a Linux-oriented .env cannot crash local runs.
+        # The Linux server never hits this branch; it uses the env values.
+        if os.name == "nt":
+            worker_pool, worker_concurrency = "solo", "1"
+        else:
+            worker_pool = os.getenv("CELERY_WORKER_POOL", "prefork")
+            worker_concurrency = os.getenv("CELERY_WORKER_CONCURRENCY", "2")
 
         # Start the worker process directly using celery command
         cmd = [

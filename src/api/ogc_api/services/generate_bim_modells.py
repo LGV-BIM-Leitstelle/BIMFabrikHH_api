@@ -15,20 +15,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from BIMFabrikHH_core import (
-    CityGenericApp,
-    CityRustApp,
-    RequestParams,
-    TerrainGenericApp,
-    TerrainRustApp,
-    TreesGenericApp,
-    TreesRustApp,
-)
-from BIMFabrikHH_core.apps.trees import (
-    DEFAULT_OAF_SCHEMA,
+from BIMFabrikHH_core.apps.city.generic.app import CityGenericApp
+from BIMFabrikHH_core.apps.city.generic_rust import CityRustApp
+from BIMFabrikHH_core.apps.terrain.generic.app import TerrainGenericApp
+from BIMFabrikHH_core.apps.terrain.generic_rust import TerrainRustApp
+from BIMFabrikHH_core.apps.trees.generic.app import TreesGenericApp
+from BIMFabrikHH_core.apps.trees.generic_rust import TreesRustApp
+from BIMFabrikHH_core.apps.trees.processing import (
     dataframe_to_records,
     tree_crown_detail_from_containers,
 )
+from BIMFabrikHH_core.apps.trees.column_schema import DEFAULT_OAF_SCHEMA
+from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from BIMFabrikHH_core.core.data_processing import DataProcessor
 from BIMFabrikHH_core.core.georeferencing import (
     bbox_request_params_to_epsg25832,
@@ -89,6 +87,8 @@ app = Celery(
 # time, so long jobs are load-balanced evenly instead of one child hoarding the
 # backlog. ``task_acks_late=True`` acknowledges a task only after it completes,
 # so an in-flight job survives a worker crash (it is redelivered).
+# ``task_track_started=True`` writes STARTED to the result backend so
+# GET /ogc/jobs/{id} can show OGC ``running`` instead of staying ``accepted``.
 #
 # ``worker_redirect_stdouts=False`` stops Celery from replacing ``sys.stdout``/
 # ``sys.stderr`` with a logging proxy. Logging is configured explicitly via the
@@ -100,6 +100,7 @@ app.conf.update(
     task_routes={f"{__name__}.*": {"queue": PROCESSING_QUEUE}},
     worker_prefetch_multiplier=1,
     task_acks_late=True,
+    task_track_started=True,
     worker_redirect_stdouts=False,
 )
 
@@ -183,6 +184,11 @@ def ifc_result(filename: str) -> Dict[str, Any]:
     }
 
 
+def empty_result(message: str) -> Dict[str, Any]:
+    """Successful job with no IFC — the umring simply had no features."""
+    return {"message": message, "model": None}
+
+
 @app.task(bind=True)
 def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -242,7 +248,8 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
         df = DataProcessor.raw_data_to_dataframe(raw_tree_data)
         if df.empty:
-            raise ValueError(NO_TREES_MESSAGE)
+            logger.info(NO_TREES_MESSAGE)
+            return empty_result(NO_TREES_MESSAGE)
 
         schema = DEFAULT_OAF_SCHEMA
         if tif_path:
@@ -265,7 +272,8 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             detail=tree_crown_detail_from_containers(request_params.containers),
         )
         if not records:
-            raise ValueError(NO_TREES_MESSAGE)
+            logger.info(NO_TREES_MESSAGE)
+            return empty_result(NO_TREES_MESSAGE)
 
         basepoint_psets = extract_psets_basepoint(request_params.containers or [])
         TreesGenericApp.build_ifc(
@@ -336,7 +344,8 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
 
         df = DataProcessor.raw_data_to_dataframe(raw_tree_data)
         if df.empty:
-            raise ValueError(NO_TREES_MESSAGE)
+            logger.info(NO_TREES_MESSAGE)
+            return empty_result(NO_TREES_MESSAGE)
 
         schema = DEFAULT_OAF_SCHEMA
         if tif_path:
@@ -355,7 +364,8 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
             detail=tree_crown_detail_from_containers(request_params.containers),
         )
         if not records:
-            raise ValueError(NO_TREES_MESSAGE)
+            logger.info(NO_TREES_MESSAGE)
+            return empty_result(NO_TREES_MESSAGE)
 
         self.update_state(state="PROGRESS", meta={"percent": 75})
         bbox_utm = bbox_request_params_to_epsg25832(request_params)
@@ -450,7 +460,8 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             output_path=output_path,
         )
         if ifc_path is None:
-            raise ValueError(NO_BUILDINGS_MESSAGE)
+            logger.info(NO_BUILDINGS_MESSAGE)
+            return empty_result(NO_BUILDINGS_MESSAGE)
 
         self.update_state(state="PROGRESS", meta={"percent": 75})
         self.update_state(state="PROGRESS", meta={"percent": 100})
@@ -520,7 +531,8 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
             output_path=output_path,
         )
         if ifc_path is None:
-            raise ValueError(NO_BUILDINGS_MESSAGE)
+            logger.info(NO_BUILDINGS_MESSAGE)
+            return empty_result(NO_BUILDINGS_MESSAGE)
 
         self.update_state(state="PROGRESS", meta={"percent": 100})
         return ifc_result(filename)
@@ -559,7 +571,8 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         # Fetch tile information using API package
         tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
         if not tif_filenames:
-            raise FileNotFoundError(NO_TERRAIN_MESSAGE)
+            logger.info(NO_TERRAIN_MESSAGE)
+            return empty_result(NO_TERRAIN_MESSAGE)
 
         # Check tile limit
         if len(tif_filenames) > 4:
@@ -603,7 +616,8 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
 
         tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
         if not tif_filenames:
-            raise FileNotFoundError(NO_TERRAIN_MESSAGE)
+            logger.info(NO_TERRAIN_MESSAGE)
+            return empty_result(NO_TERRAIN_MESSAGE)
         if len(tif_filenames) > 4:
             raise ValueError(TILE_LIMIT_MESSAGE)
 

@@ -351,8 +351,9 @@ def get_job_results(jobId: str) -> JSONResponse:
                     "url-https": model_data["url-https"],
                 }
             )
-        else:
-            raise HTTPException(status_code=404, detail="No model data found in result")
+        if job.result.get("message"):
+            return JSONResponse(content={"message": job.result["message"]})
+        raise HTTPException(status_code=404, detail="No model data found in result")
     elif job.state == "FAILURE":
         logger.error("Results requested for failed job %s: %s", jobId, job.info)
         raise HTTPException(status_code=500, detail=f"Job failed: {job.info}")

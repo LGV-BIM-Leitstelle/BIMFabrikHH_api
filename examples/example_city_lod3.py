@@ -1,7 +1,7 @@
 """Same 1.5 km × 1.5 km Innenstadt umring for city LoD3, trees, and DGM (rust).
 
-    python example_city_lod3.py
-    python example_city_lod3.py --base-url http://localhost:8083
+    python examples/example_city_lod3.py
+    python examples/example_city_lod3.py --base-url http://localhost:8083
 """
 
 from __future__ import annotations

@@ -23,7 +23,7 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
-fastapi = "^0.115.8"
+fastapi = "0.120.1"
 requests = "^2.32.3"
 celery = { extras = ["redis"], version = "^5.6.3" }
 python-dotenv = "^1.1.1"
@@ -31,7 +31,7 @@ bimfabrikhh-core = { git = "https://github.com/LGV-BIM-Leitstelle/BIMFabrikHH_co
 sqlalchemy = "^2.0.44"
 uvicorn = "^0.34.0"
 redis = "^5.0"
-fastapi-limiter = "^0.1.6"
+fastapi-limiter = "0.1.6"
 concurrent-log-handler = "^0.9.25"
 prometheus-fastapi-instrumentator = "^7.0.0"
 psycopg = {extras = ["binary"], version = "^3.2"}
