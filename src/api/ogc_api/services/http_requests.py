@@ -29,17 +29,16 @@ class HamburgOGCAPI:
     DEFAULT_CRS = api_settings.API_DEFAULT_CRS
 
     @staticmethod
-    def fetch_data(url: str, params: Dict[str, Any]) -> Dict[str, Any] | ET.Element:
+    def fetch_data(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Fetch data from OGC API or WFS API with error handling.
+        Fetch data from OGC API with error handling.
 
         Args:
             url: The API endpoint URL
             params: Query parameters
 
         Returns:
-            API response data as dictionary for JSON responses,
-            or as a string for XML responses.
+            API response data as dictionary for JSON responses
 
         Raises:
             requests.RequestException: If the request fails
@@ -49,15 +48,7 @@ class HamburgOGCAPI:
             response = requests.get(url, params=params, timeout=HamburgOGCAPI.TIMEOUT)
             response.raise_for_status()
 
-            content_type = response.headers.get("Content-Type", "").lower()
-
-            data = None
-            if "json" in content_type:
-                data = response.json()
-            elif "xml" in content_type:
-                data = etree.fromstring(response.content)
-            else:
-                raise ValueError(f"Unsupported content type: {content_type}")
+            data = response.json()
 
             LOGGER.info(f"Successfully fetched data from {url}")
             return data
@@ -195,6 +186,42 @@ class HamburgOGCAPI:
             return None
 
 
+class WFSAPI:
+    """Handles HTTP requests to WFS APIs."""
+
+    # API settings from configuration
+    TIMEOUT = api_settings.API_TIMEOUT
+
+    @staticmethod
+    def fetch_data(url: str, params: Dict[str, Any]) -> ET.Element:
+        """
+        Fetch data from WFS API with error handling.
+
+        Args:
+            url: The API endpoint URL
+            params: Query parameters
+
+        Returns:
+            API response data as an XML element.
+
+        Raises:
+            requests.RequestException: If the request fails
+        """
+        try:
+            LOGGER.info(f"Fetching data from: {url}")
+            response = requests.get(url, params=params, timeout=WFSAPI.TIMEOUT)
+            response.raise_for_status()
+
+            data = etree.fromstring(response.content)
+
+            LOGGER.info(f"Successfully fetched data from {url}")
+            return data
+
+        except requests.RequestException as e:
+            LOGGER.error(f"Failed to fetch data from {url}: {e}")
+            raise
+
+
 class DataFetcher:
     """Handles fetching raw data from various sources."""
 
@@ -296,4 +323,4 @@ class DataFetcher:
         }
 
         url = str(api_settings.WFS_BOREHOLE_API_URL)
-        return HamburgOGCAPI.fetch_data(url, params)
+        return WFSAPI.fetch_data(url, params)
