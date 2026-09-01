@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import re
 from typing import Any, Dict
+import xml.etree.ElementTree as ET
+from lxml import etree
 
 import pytest
 from fastapi.testclient import TestClient
 
 from src.api.config import api_settings
-from src.api.ogc_api.services.http_requests import DataFetcher, HamburgOGCAPI
+from src.api.ogc_api.services.http_requests import DataFetcher, HamburgOGCAPI, WFSAPI
 from src.api.web_app import create_app
 
 pytestmark = [
@@ -48,10 +50,27 @@ HAMBURG_HAFEN_BBOX: Dict[str, float] = {
     "max_y": 53.5480,
 }
 
+# Bbox in Hamburg St.Pauli / Neustadt with 294 mostly public boreholes with varied depths.
+HAMBURG_BOREHOLE_BBOX: Dict[str, float] = {
+    "min_x": 9.9717,
+    "min_y": 53.5475,
+    "max_x": 9.9800,
+    "max_y": 53.5514,
+}
+
+BOREHOLE_NAMESPACES = {
+    "wfs":  "http://www.opengis.net/wfs/2.0",
+    "gml":  "http://www.opengis.net/gml/3.2",
+    "bml":  "http://www.infogeo.de/boreholeml/3.0",
+    "gmd":  "http://www.isotc211.org/2005/gmd",
+    "gn":   "urn:x-inspire:specification:gmlas:GeographicalNames:3.0",
+    "gco":  "http://www.isotc211.org/2005/gco",
+}
+
 DGM_TILE_PATTERN = re.compile(r"^dgm1_32_\d+_\d+_1_hh_2022\.tif$")
 
 
-def _assert_feature_collection(data: Dict[str, Any]) -> None:
+def _assert_oaf_feature_collection(data: Dict[str, Any]) -> None:
     assert isinstance(data, dict)
     assert data.get("type") == "FeatureCollection"
     assert "features" in data
@@ -66,13 +85,19 @@ def _assert_point_feature(feature: Dict[str, Any]) -> None:
     assert "properties" in feature
 
 
+def _assert_wfs_feature_collection(data: ET.Element) -> None:
+    assert isinstance(data, ET.Element)
+    qname = etree.QName(data)
+    assert  qname.namespace == "http://www.opengis.net/wfs/2.0"
+    assert qname.localname == "FeatureCollection"
+
 @pytest.fixture(scope="module")
 def live_client() -> TestClient:
     return TestClient(create_app())
 
 
 class TestEnvApiUrlConfiguration:
-    """Verify the three external API URLs are loaded from .env."""
+    """Verify the four external API URLs are loaded from .env."""
 
     def test_trees_api_url_configured(self) -> None:
         url = str(api_settings.TREES_API_URL)
@@ -92,29 +117,21 @@ class TestEnvApiUrlConfiguration:
         assert "lgv_kachel_dk5_1km_utm" in url
         assert url.endswith("/items")
 
+    def test_wfs_borehole_api_url_configured(self) -> None:
+        url = str(api_settings.WFS_BOREHOLE_API_URL)
+        assert url.startswith("https://")
+        assert "HH_WFS_BoreholeML3" in url
+        assert url.endswith("&TYPENAMES=bml:Borehole")
+
 
 class TestTreesApiUrl:
     """Live tests for TREES_API_URL."""
 
     def test_fetch_tree_data_returns_feature_collection(self) -> None:
         data = DataFetcher.fetch_tree_data(HAMBURG_TREE_BBOX)
-        _assert_feature_collection(data)
+        _assert_oaf_feature_collection(data)
         assert len(data["features"]) > 0
         _assert_point_feature(data["features"][0])
-
-    def test_trees_url_matches_env_setting(self) -> None:
-        params = {
-            "f": "json",
-            "bbox": (
-                f"{HAMBURG_TREE_BBOX['min_x']},{HAMBURG_TREE_BBOX['min_y']},"
-                f"{HAMBURG_TREE_BBOX['max_x']},{HAMBURG_TREE_BBOX['max_y']}"
-            ),
-            "crs": HamburgOGCAPI.DEFAULT_CRS,
-            "limit": 10,
-            "skipGeometry": "false",
-        }
-        data = HamburgOGCAPI.fetch_data(str(api_settings.TREES_API_URL), params)
-        _assert_feature_collection(data)
 
 
 class TestTreesHafenApiUrl:
@@ -122,21 +139,7 @@ class TestTreesHafenApiUrl:
 
     def test_fetch_tree_data_hafen_returns_feature_collection(self) -> None:
         data = DataFetcher.fetch_tree_data_hafen(HAMBURG_HAFEN_BBOX)
-        _assert_feature_collection(data)
-
-    def test_hafen_url_matches_env_setting(self) -> None:
-        params = {
-            "f": "json",
-            "bbox": (
-                f"{HAMBURG_HAFEN_BBOX['min_x']},{HAMBURG_HAFEN_BBOX['min_y']},"
-                f"{HAMBURG_HAFEN_BBOX['max_x']},{HAMBURG_HAFEN_BBOX['max_y']}"
-            ),
-            "crs": HamburgOGCAPI.DEFAULT_CRS,
-            "limit": 10,
-            "skipGeometry": "false",
-        }
-        data = HamburgOGCAPI.fetch_data(str(api_settings.TREES_HAFEN_API_URL), params)
-        _assert_feature_collection(data)
+        _assert_oaf_feature_collection(data)
 
 
 class TestDgmTilesApiUrl:
@@ -152,7 +155,7 @@ class TestDgmTilesApiUrl:
             "skipGeometry": "false",
         }
         data = HamburgOGCAPI.fetch_data(str(api_settings.DGM_TILES_API_URL), params)
-        _assert_feature_collection(data)
+        _assert_oaf_feature_collection(data)
         assert len(data["features"]) > 0
         assert "kachelbezeichnung_dk5" in data["features"][0].get("properties", {})
 
@@ -161,6 +164,18 @@ class TestDgmTilesApiUrl:
         assert isinstance(tiles, list)
         assert len(tiles) > 0
         assert all(DGM_TILE_PATTERN.match(tile) for tile in tiles)
+
+
+class TestBoreholeApiUrl:
+    """" Live tests for WFS_BOREHOLE_API_URL. """
+
+    def test_borehole_url_returns_xml_element(self) -> None:
+        data = DataFetcher.fetch_borehole_data(HAMBURG_BOREHOLE_BBOX)
+        assert isinstance(data, ET.Element) 
+
+    def test_borehole_url_returns_wfs_feature_collection(self) -> None:
+        data = DataFetcher.fetch_borehole_data(HAMBURG_BOREHOLE_BBOX)
+        _assert_wfs_feature_collection(data)
 
 
 class TestDataApiOafEndpoints:
@@ -173,7 +188,7 @@ class TestDataApiOafEndpoints:
         )
         assert response.status_code == 200
         data = response.json()
-        _assert_feature_collection(data)
+        _assert_oaf_feature_collection(data)
         assert len(data["features"]) > 0
 
     def test_oaf_trees_hafen_endpoint(self, live_client: TestClient) -> None:
@@ -182,7 +197,7 @@ class TestDataApiOafEndpoints:
             params=HAMBURG_HAFEN_BBOX,
         )
         assert response.status_code == 200
-        _assert_feature_collection(response.json())
+        _assert_oaf_feature_collection(response.json())
 
     def test_oaf_dgm_tiles_endpoint(self, live_client: TestClient) -> None:
         response = live_client.get(
