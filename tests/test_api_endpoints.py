@@ -124,7 +124,10 @@ class TestProcessesEndpoints:
         expected_processes = [
             "generate-tree-model",
             "generate-city-model",
-            "generate-dgm-model"
+            "generate-dgm-model",
+            "generate-tree-model-rs",
+            "generate-city-model-rs",
+            "generate-dgm-model-rs",
         ]
         
         for process_id in expected_processes:
@@ -149,6 +152,21 @@ class TestProcessesEndpoints:
         data = response.json()
         assert data["id"] == "generate-city-model"
         assert "title" in data
+
+    def test_get_process_description_tree_rs(self, client):
+        response = client.get("/ogc/processes/generate-tree-model-rs")
+        assert response.status_code == 200
+        assert response.json()["id"] == "generate-tree-model-rs"
+
+    def test_get_process_description_city_rs(self, client):
+        response = client.get("/ogc/processes/generate-city-model-rs")
+        assert response.status_code == 200
+        assert response.json()["id"] == "generate-city-model-rs"
+
+    def test_get_process_description_dgm_rs(self, client):
+        response = client.get("/ogc/processes/generate-dgm-model-rs")
+        assert response.status_code == 200
+        assert response.json()["id"] == "generate-dgm-model-rs"
 
     def test_get_process_description_dgm(self, client):
         """Test getting DGM model process description."""
@@ -217,6 +235,40 @@ class TestProcessExecution:
         
         assert response.status_code == 201
         assert "Location" in response.headers
+
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_tree_model_rs")
+    def test_execute_tree_model_rs_process(self, mock_task, client, valid_execution_input):
+        mock_result = Mock()
+        mock_result.id = "test-task-rs-123"
+        mock_task.delay.return_value = mock_result
+        response = client.post(
+            "/ogc/processes/generate-tree-model-rs/execution",
+            json=valid_execution_input,
+        )
+        assert response.status_code == 201
+        assert "test-task-rs-123" in response.headers["Location"]
+
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_city_model_rs")
+    def test_execute_city_model_rs_process(self, mock_task, client, valid_execution_input):
+        mock_result = Mock()
+        mock_result.id = "test-task-rs-456"
+        mock_task.delay.return_value = mock_result
+        response = client.post(
+            "/ogc/processes/generate-city-model-rs/execution",
+            json=valid_execution_input,
+        )
+        assert response.status_code == 201
+
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_dgm_model_rs")
+    def test_execute_dgm_model_rs_process(self, mock_task, client, valid_execution_input):
+        mock_result = Mock()
+        mock_result.id = "test-task-rs-789"
+        mock_task.delay.return_value = mock_result
+        response = client.post(
+            "/ogc/processes/generate-dgm-model-rs/execution",
+            json=valid_execution_input,
+        )
+        assert response.status_code == 201
 
     def test_execute_nonexistent_process(self, client, valid_execution_input):
         """Test executing non-existent process."""

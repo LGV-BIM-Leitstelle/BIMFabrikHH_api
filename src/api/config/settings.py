@@ -57,6 +57,7 @@ class APISettings(BaseSettings):
     DATA_BASE_URL: str
     DATA_LOD1_FOLDER: str
     DATA_LOD2_FOLDER: str
+    DATA_LOD3_FOLDER: str
     DATA_DGM_FOLDER: str
 
 

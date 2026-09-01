@@ -18,26 +18,28 @@ from fastapi.responses import JSONResponse
 from src.api.ogc_api.ogc_metadata.dict_conformance import content_conformance
 from src.api.ogc_api.ogc_metadata.dict_landing_page import content_landing_page
 from src.api.ogc_api.ogc_metadata.dict_processes import content_get_processes
-from src.api.ogc_api.ogc_metadata.process_definitions import (
-    content_get_process_generate_city_model,
-    content_get_process_generate_dgm_model,
-    content_get_process_generate_tree_model,
-)
+from src.api.ogc_api.ogc_metadata.process_definitions import PROCESS_DEFINITIONS
 from src.api.ogc_api.services.generate_bim_modells import (
     app,
     execute_generate_city_model,
+    execute_generate_city_model_rs,
     execute_generate_dgm_model,
+    execute_generate_dgm_model_rs,
     execute_generate_tree_model,
+    execute_generate_tree_model_rs,
 )
 from src.api.config.settings import api_settings
 
 router_ogc = APIRouter()
 
 
-PROCESS_INPUT_MODELS = {
-    "generate-tree-model": RequestParams,
-    "generate-city-model": RequestParams,
-    "generate-dgm-model": RequestParams,
+PROCESS_TASKS = {
+    "generate-tree-model": execute_generate_tree_model,
+    "generate-city-model": execute_generate_city_model,
+    "generate-dgm-model": execute_generate_dgm_model,
+    "generate-tree-model-rs": execute_generate_tree_model_rs,
+    "generate-city-model-rs": execute_generate_city_model_rs,
+    "generate-dgm-model-rs": execute_generate_dgm_model_rs,
 }
 
 
@@ -112,14 +114,10 @@ def get_process(processID: str) -> JSONResponse:
     Raises:
         HTTPException: If the process is not found.
     """
-    if processID == "generate-tree-model":
-        return JSONResponse(content=content_get_process_generate_tree_model)
-    elif processID == "generate-city-model":
-        return JSONResponse(content=content_get_process_generate_city_model)
-    elif processID == "generate-dgm-model":
-        return JSONResponse(content=content_get_process_generate_dgm_model)
-    else:
+    description = PROCESS_DEFINITIONS.get(processID)
+    if description is None:
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")
+    return JSONResponse(content=description)
 
 
 # Job List
@@ -174,23 +172,14 @@ def execute_process(
     Raises:
         HTTPException: If the process is not found.
     """
-    # Check if we have a model for this process
-    input_model_cls = PROCESS_INPUT_MODELS.get(processID)
-    if not input_model_cls:
+    task_fn = PROCESS_TASKS.get(processID)
+    if task_fn is None:
         raise HTTPException(status_code=404, detail=f"Process {processID} not found")
 
-    # Submit task to Celery
-    if processID == "generate-tree-model":
-        task = execute_generate_tree_model.delay(inputs.model_dump())
-    elif processID == "generate-city-model":
-        task = execute_generate_city_model.delay(inputs.model_dump())
-    elif processID == "generate-dgm-model":
-        task = execute_generate_dgm_model.delay(inputs.model_dump())
-    else:
-        raise HTTPException(status_code=404, detail=f"Process {processID} not found")
+    task = task_fn.delay(inputs.model_dump())
 
     jobId = task.id
-    
+
     # Get base URL from settings
     base_url = str(api_settings.BASE_URL).rstrip('/')
 

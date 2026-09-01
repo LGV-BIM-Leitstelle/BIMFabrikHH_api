@@ -1,0 +1,7 @@
+# Keep LF in the repository and in the working tree on every platform.
+# Without this, a Windows editor rewrites whole files as CRLF and the diff
+# shows every line as changed.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary

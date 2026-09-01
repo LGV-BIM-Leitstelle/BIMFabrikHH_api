@@ -1,13 +1,64 @@
 """
 Process definitions for OGC API processes.
 
-This module defines the process schemas and metadata for the OGC API
-processes including tree model, city model, and DGM model generation.
+PROCESS_SPECS is the single place where a process id, title and description are
+declared. Both the process list endpoint and the process description endpoint
+derive from it, so a new process needs one entry here plus its Celery task in
+main_ogc.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, NamedTuple, Tuple
 
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
+
+PROCESS_VERSION = "0.1.0"
+
+
+class ProcessSpec(NamedTuple):
+    """Metadata of one OGC process. The Celery task is wired up in main_ogc."""
+
+    id: str
+    title: str
+    description: str
+
+
+PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
+    ProcessSpec(
+        "generate-tree-model",
+        "Generate BIM tree models as IFC",
+        "Creates BIM models of trees within a given bounding box and exports them as an IFC file. "
+        "Set use_dgm_elevation=true to assign ground elevation from DGM GeoTIFF tiles (off by default).",
+    ),
+    ProcessSpec(
+        "generate-city-model",
+        "Generate BIM city models as IFC",
+        "Creates BIM models of city buildings within a bounding box and exports them as an IFC file",
+    ),
+    ProcessSpec(
+        "generate-dgm-model",
+        "Generate BIM terrain models as IFC",
+        "Creates BIM terrain models within a given bounding box and exports them as an IFC file",
+    ),
+    ProcessSpec(
+        "generate-tree-model-rs",
+        "Generate BIM tree models as IFC (Rust)",
+        "Creates BIM models of trees within a given bounding box and exports them as an IFC file "
+        "via TreesRustApp. Set use_dgm_elevation=true to assign ground elevation from DGM GeoTIFF "
+        "tiles (off by default).",
+    ),
+    ProcessSpec(
+        "generate-city-model-rs",
+        "Generate BIM city models as IFC (Rust)",
+        "Creates BIM models of city buildings within a bounding box and exports them as an IFC file "
+        "via CityRustApp (mesh). LoD3 uses DATA_LOD3_FOLDER.",
+    ),
+    ProcessSpec(
+        "generate-dgm-model-rs",
+        "Generate BIM terrain models as IFC (Rust)",
+        "Creates BIM terrain models within a given bounding box and exports them as an IFC file "
+        "via TerrainRustApp (Python mesh, Rust STEP write).",
+    ),
+)
 
 
 def create_ifc_process_definition(
@@ -28,7 +79,7 @@ def create_ifc_process_definition(
         "id": process_id,
         "title": title,
         "description": description,
-        "version": "0.1.0",
+        "version": PROCESS_VERSION,
         "inputs": RequestParams.model_json_schema(),
         "outputs": {
             "ifc_file": {
@@ -48,21 +99,8 @@ def create_ifc_process_definition(
     }
 
 
-content_get_process_generate_tree_model = create_ifc_process_definition(
-    "generate-tree-model",
-    "Generate BIM tree models as IFC",
-    "Creates BIM models of trees within a given bounding box and exports them as an IFC file. "
-    "Set use_dgm_elevation=true to assign ground elevation from DGM GeoTIFF tiles (off by default).",
-)
-
-content_get_process_generate_city_model = create_ifc_process_definition(
-    "generate-city-model",
-    "Generate BIM city models as IFC",
-    "Creates BIM models of city buildings within a bounding box and exports them as an IFC file",
-)
-
-content_get_process_generate_dgm_model = create_ifc_process_definition(
-    "generate-dgm-model",
-    "Generate BIM terrain models as IFC",
-    "Creates BIM terrain models within a given bounding box and exports them as an IFC file",
-)
+# Full description per process ID, served by /processes/{processID}.
+PROCESS_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+    spec.id: create_ifc_process_definition(spec.id, spec.title, spec.description)
+    for spec in PROCESS_SPECS
+}
