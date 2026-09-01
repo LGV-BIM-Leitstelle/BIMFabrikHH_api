@@ -10,6 +10,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+import xml.etree.ElementTree as ET
+from lxml import etree
 import requests
 from BIMFabrikHH_core.core.utils import MathTool
 
@@ -27,16 +29,17 @@ class HamburgOGCAPI:
     DEFAULT_CRS = api_settings.API_DEFAULT_CRS
 
     @staticmethod
-    def fetch_data(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def fetch_data(url: str, params: Dict[str, Any]) -> Dict[str, Any] | ET.Element:
         """
-        Fetch data from OGC API with error handling.
+        Fetch data from OGC API or WFS API with error handling.
 
         Args:
             url: The API endpoint URL
             params: Query parameters
 
         Returns:
-            API response data as dictionary
+            API response data as dictionary for JSON responses,
+            or as a string for XML responses.
 
         Raises:
             requests.RequestException: If the request fails
@@ -46,7 +49,16 @@ class HamburgOGCAPI:
             response = requests.get(url, params=params, timeout=HamburgOGCAPI.TIMEOUT)
             response.raise_for_status()
 
-            data = response.json()
+            content_type = response.headers.get("Content-Type", "").lower()
+
+            data = None
+            if "json" in content_type:
+                data = response.json()
+            elif "xml" in content_type:
+                data = etree.fromstring(response.content)
+            else:
+                raise ValueError(f"Unsupported content type: {content_type}")
+
             LOGGER.info(f"Successfully fetched data from {url}")
             return data
 
@@ -267,3 +279,21 @@ class DataFetcher:
             bbox["max_y"],
             model_type="basic",
         )
+
+    @staticmethod
+    def fetch_borehole_data(bbox: Dict[str, float]) -> ET.Element:
+        """
+        Fetch borehole data from the WFS BoreholeML 3.0 API.
+
+        Args:
+            bbox: Bounding box parameters
+
+        Returns:
+            Raw borehole data
+        """
+        params = {
+            "bbox": f"{bbox['min_x']},{bbox['min_y']},{bbox['max_x']},{bbox['max_y']},EPSG:4326",
+        }
+
+        url = str(api_settings.WFS_BOREHOLE_API_URL)
+        return HamburgOGCAPI.fetch_data(url, params)
