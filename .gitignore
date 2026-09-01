@@ -13,6 +13,8 @@ temp/
 .vscode/
 *.swp
 *.swo
+.github/agents/
+AGENTS.md
 
 # Python
 __pycache__/
@@ -40,6 +42,7 @@ poetry.lock
 
 # Docker
 .dockerignore
+docker-compose*.yml
 
 # OS
 .DS_Store
@@ -49,3 +52,5 @@ Thumbs.db
 /deploy/
 /examples/
 /templates/
+logs/
+monitoring/
