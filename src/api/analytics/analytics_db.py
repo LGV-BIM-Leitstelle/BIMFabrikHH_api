@@ -27,10 +27,20 @@ import time
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 
 from src.api.config.settings import api_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _log_db_failure(message: str, exc: Exception) -> None:
+    """Log an analytics DB failure."""
+    if isinstance(exc, OperationalError):
+        logger.warning("%s: analytics DB unreachable (%s)", message, exc.orig or exc)
+    else:
+        logger.exception(message)
+
 
 # Lazily-initialized engine shared across the process.
 _engine: Engine | None = None
@@ -79,8 +89,8 @@ def _get_engine() -> Engine | None:
                 api_settings.ANALYTICS_DB_PORT,
                 api_settings.ANALYTICS_DB_NAME,
             )
-        except Exception:
-            logger.exception("Failed to initialize analytics DB engine")
+        except Exception as exc:
+            _log_db_failure("Failed to initialize analytics DB engine", exc)
             _engine = None
     return _engine
 
@@ -177,5 +187,5 @@ def insert_bbox_event(
                 },
             )
             _maybe_purge(conn)
-    except Exception:
-        logger.exception("Failed to record bbox analytics event")
+    except Exception as exc:
+        _log_db_failure("Failed to record bbox analytics event", exc)
