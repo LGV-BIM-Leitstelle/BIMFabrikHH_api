@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import re
 from typing import Any, Dict
-import xml.etree.ElementTree as ET
 from lxml import etree
 
 import pytest
@@ -50,7 +49,7 @@ HAMBURG_HAFEN_BBOX: Dict[str, float] = {
     "max_y": 53.5480,
 }
 
-# Bbox in Hamburg St.Pauli / Neustadt with 294 mostly public boreholes with varied depths.
+# Bbox in Hamburg St.Pauli / Neustadt with 294 mostly public boreholes with varied depths. TODO: choose smaller box.
 HAMBURG_BOREHOLE_BBOX: Dict[str, float] = {
     "min_x": 9.9717,
     "min_y": 53.5475,
@@ -85,10 +84,10 @@ def _assert_point_feature(feature: Dict[str, Any]) -> None:
     assert "properties" in feature
 
 
-def _assert_wfs_feature_collection(data: ET.Element) -> None:
-    assert isinstance(data, ET.Element)
+def _assert_wfs_feature_collection(data: etree._Element) -> None:
+    assert isinstance(data, etree._Element)
     qname = etree.QName(data)
-    assert  qname.namespace == "http://www.opengis.net/wfs/2.0"
+    assert qname.namespace == "http://www.opengis.net/wfs/2.0"
     assert qname.localname == "FeatureCollection"
 
 @pytest.fixture(scope="module")
@@ -170,11 +169,11 @@ class TestBoreholeApiUrl:
     """" Live tests for WFS_BOREHOLE_API_URL. """
 
     def test_borehole_url_returns_xml_element(self) -> None:
-        data = DataFetcher.fetch_borehole_data(HAMBURG_BOREHOLE_BBOX)
-        assert isinstance(data, ET.Element) 
+        data = DataFetcher.fetch_borehole_data(HAMBURG_TREE_BBOX)
+        assert isinstance(data, etree._Element) 
 
     def test_borehole_url_returns_wfs_feature_collection(self) -> None:
-        data = DataFetcher.fetch_borehole_data(HAMBURG_BOREHOLE_BBOX)
+        data = DataFetcher.fetch_borehole_data(HAMBURG_TREE_BBOX)
         _assert_wfs_feature_collection(data)
 
 

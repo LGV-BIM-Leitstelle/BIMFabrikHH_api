@@ -10,7 +10,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-import xml.etree.ElementTree as ET
 from lxml import etree
 import requests
 from BIMFabrikHH_core.core.utils import MathTool
@@ -193,7 +192,7 @@ class WFSAPI:
     TIMEOUT = api_settings.API_TIMEOUT
 
     @staticmethod
-    def fetch_data(url: str, params: Dict[str, Any]) -> ET.Element:
+    def fetch_data(url: str, params: Dict[str, Any]) -> etree._Element:
         """
         Fetch data from WFS API with error handling.
 
@@ -308,7 +307,7 @@ class DataFetcher:
         )
 
     @staticmethod
-    def fetch_borehole_data(bbox: Dict[str, float]) -> ET.Element:
+    def fetch_borehole_data(bbox: Dict[str, float]) -> etree._Element:
         """
         Fetch borehole data from the WFS BoreholeML 3.0 API.
 
