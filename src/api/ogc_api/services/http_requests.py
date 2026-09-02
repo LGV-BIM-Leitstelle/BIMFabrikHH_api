@@ -206,19 +206,23 @@ class WFSAPI:
         Raises:
             requests.RequestException: If the request fails
         """
+
+        LOGGER.info("Fetching data from: %s", url)
+
         try:
-            LOGGER.info(f"Fetching data from: {url}")
             response = requests.get(url, params=params, timeout=WFSAPI.TIMEOUT)
             response.raise_for_status()
-
             data = etree.fromstring(response.content)
 
-            LOGGER.info(f"Successfully fetched data from {url}")
-            return data
-
-        except requests.RequestException as e:
-            LOGGER.error(f"Failed to fetch data from {url}: {e}")
+        except requests.RequestException:
+            LOGGER.exception("Failed to fetch data from %s:", url)
             raise
+        except etree.XMLSyntaxError:
+            LOGGER.exception("Invalid XML received from %s", url)
+            raise
+
+        LOGGER.info("Successfully fetched data from %s", url)
+        return data
 
 
 class DataFetcher:
