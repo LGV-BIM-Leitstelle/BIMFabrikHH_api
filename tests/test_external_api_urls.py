@@ -49,12 +49,12 @@ HAMBURG_HAFEN_BBOX: Dict[str, float] = {
     "max_y": 53.5480,
 }
 
-# Bbox in Hamburg St.Pauli / Neustadt with 294 mostly public boreholes with varied depths. TODO: choose smaller box.
-HAMBURG_BOREHOLE_BBOX: Dict[str, float] = {
-    "min_x": 9.9717,
-    "min_y": 53.5475,
-    "max_x": 9.9800,
-    "max_y": 53.5514,
+# Small bounding box with 4 boreholes.
+BBOX: Dict[str, float] = {
+    "min_x": 9.9861, 
+    "min_y": 53.4867, 
+    "max_x": 9.9872, 
+    "max_y": 53.4872
 }
 
 BOREHOLE_NAMESPACES = {
@@ -169,11 +169,11 @@ class TestBoreholeApiUrl:
     """" Live tests for WFS_BOREHOLE_API_URL. """
 
     def test_borehole_url_returns_xml_element(self) -> None:
-        data = DataFetcher.fetch_borehole_data(HAMBURG_TREE_BBOX)
+        data = DataFetcher.fetch_borehole_data(HAMBURG_BOREHOLE_BBOX)
         assert isinstance(data, etree._Element) 
 
     def test_borehole_url_returns_wfs_feature_collection(self) -> None:
-        data = DataFetcher.fetch_borehole_data(HAMBURG_TREE_BBOX)
+        data = DataFetcher.fetch_borehole_data(HAMBURG_BOREHOLE_BBOX)
         _assert_wfs_feature_collection(data)
 
 
