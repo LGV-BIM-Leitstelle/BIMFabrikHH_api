@@ -81,6 +81,9 @@ class APISettings(BaseSettings):
     # DGM API (dgm app)
     DGM_TILES_API_URL: HttpUrl
 
+    # WFS BOREHOLE API (borehole app)
+    WFS_BOREHOLE_API_URL: HttpUrl
+
     # API Settings
     API_TIMEOUT: int
     API_DEFAULT_LIMIT: int
@@ -184,6 +187,7 @@ class APISettings(BaseSettings):
             f"  Trees API:           {self.TREES_API_URL}",
             f"  Trees Hafen API:     {self.TREES_HAFEN_API_URL}",
             f"  DGM tiles API:       {self.DGM_TILES_API_URL}",
+            f"  WFS Borehole API:       {self.WFS_BOREHOLE_API_URL}",
             f"  API timeout:         {self.API_TIMEOUT}s",
             f"  API default limit:   {self.API_DEFAULT_LIMIT}",
             f"  API default CRS:     {self.API_DEFAULT_CRS}",

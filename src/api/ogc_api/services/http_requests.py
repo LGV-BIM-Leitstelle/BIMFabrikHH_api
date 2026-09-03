@@ -10,6 +10,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+from lxml import etree
 import requests
 from BIMFabrikHH_core.core.utils import MathTool
 
@@ -36,7 +37,7 @@ class HamburgOGCAPI:
             params: Query parameters
 
         Returns:
-            API response data as dictionary
+            API response data as dictionary for JSON responses
 
         Raises:
             requests.RequestException: If the request fails
@@ -47,6 +48,7 @@ class HamburgOGCAPI:
             response.raise_for_status()
 
             data = response.json()
+
             LOGGER.info(f"Successfully fetched data from {url}")
             return data
 
@@ -183,6 +185,46 @@ class HamburgOGCAPI:
             return None
 
 
+class WFSAPI:
+    """Handles HTTP requests to WFS APIs."""
+
+    # API settings from configuration
+    TIMEOUT = api_settings.API_TIMEOUT
+
+    @staticmethod
+    def fetch_data(url: str, params: Dict[str, Any]) -> etree._Element:
+        """
+        Fetch data from WFS API with error handling.
+
+        Args:
+            url: The API endpoint URL
+            params: Query parameters
+
+        Returns:
+            API response data as an XML element.
+
+        Raises:
+            requests.RequestException: If the request fails
+        """
+
+        LOGGER.info("Fetching data from: %s", url)
+
+        try:
+            response = requests.get(url, params=params, timeout=WFSAPI.TIMEOUT)
+            response.raise_for_status()
+            data = etree.fromstring(response.content)
+
+        except requests.RequestException:
+            LOGGER.exception("Failed to fetch data from %s:", url)
+            raise
+        except etree.XMLSyntaxError:
+            LOGGER.exception("Invalid XML received from %s", url)
+            raise
+
+        LOGGER.info("Successfully fetched data from %s", url)
+        return data
+
+
 class DataFetcher:
     """Handles fetching raw data from various sources."""
 
@@ -267,3 +309,21 @@ class DataFetcher:
             bbox["max_y"],
             model_type="basic",
         )
+
+    @staticmethod
+    def fetch_borehole_data(bbox: Dict[str, float]) -> etree._Element:
+        """
+        Fetch borehole data from the WFS BoreholeML 3.0 API.
+
+        Args:
+            bbox: Bounding box parameters
+
+        Returns:
+            Raw borehole data
+        """
+        params = {
+            "bbox": f"{bbox['min_x']},{bbox['min_y']},{bbox['max_x']},{bbox['max_y']},EPSG:4326",
+        }
+
+        url = str(api_settings.WFS_BOREHOLE_API_URL)
+        return WFSAPI.fetch_data(url, params)
