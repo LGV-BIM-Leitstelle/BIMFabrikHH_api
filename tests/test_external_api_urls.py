@@ -168,11 +168,11 @@ class TestDgmTilesApiUrl:
 class TestBoreholeApiUrl:
     """" Live tests for WFS_BOREHOLE_API_URL. """
 
-    def test_borehole_url_returns_xml_element(self) -> None:
+    def test_fetch_borehole_url_returns_xml_element(self) -> None:
         data = DataFetcher.fetch_borehole_data(HAMBURG_BOREHOLE_BBOX)
         assert isinstance(data, etree._Element) 
 
-    def test_borehole_url_returns_wfs_feature_collection(self) -> None:
+    def test_fetch_borehole_url_returns_wfs_feature_collection(self) -> None:
         data = DataFetcher.fetch_borehole_data(HAMBURG_BOREHOLE_BBOX)
         _assert_wfs_feature_collection(data)
 
