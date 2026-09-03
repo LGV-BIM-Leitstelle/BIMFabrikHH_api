@@ -11,7 +11,10 @@ from unittest.mock import Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from src.api.ogc_api.services.generate_bim_modells import execute_generate_city_model
+from src.api.ogc_api.services.generate_bim_modells import (
+    execute_generate_city_model,
+    execute_generate_city_model_rs,
+)
 
 # Integration-style tests that exercise the full task in eager mode.
 pytestmark = [pytest.mark.integration, pytest.mark.celery, pytest.mark.city]
@@ -76,7 +79,7 @@ class TestCityModelGeneration:
             return_value=1,
         ), patch(
             "src.api.ogc_api.services.generate_bim_modells.transform_file_names_for_lod",
-            side_effect=lambda files, lod: files,
+            side_effect=lambda files, lod, folder: files,
         ), patch(
             "src.api.ogc_api.services.generate_bim_modells.CityGenericApp"
         ) as mock_app:
@@ -149,6 +152,28 @@ class TestCityModelGeneration:
                 match="Processing error",
             )
 
+    def test_city_model_rs_exception_handling(
+        self, valid_city_request_params, assert_task_failed
+    ):
+        """Test city model (rs) generation exception handling."""
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class:
+            # Mock dependency to raise exception
+            mock_fetcher_class.fetch_citymodel_tiles.side_effect = Exception(
+                "Rust error"
+            )
+
+            # The exception must propagate so Celery stores a readable failure.
+            # Swallowing it into a FAILURE state without exc_type made
+            # GET /ogc/jobs/{jobId} answer 500 instead of the job status.
+            assert_task_failed(
+                execute_generate_city_model_rs,
+                valid_city_request_params.model_dump(),
+                match="Rust error",
+                exc_type="Exception",
+            )
+
 
 class TestCityModelIntegration:
     """Integration tests for city model generation."""
@@ -165,7 +190,7 @@ class TestCityModelIntegration:
             return_value=1,
         ), patch(
             "src.api.ogc_api.services.generate_bim_modells.transform_file_names_for_lod",
-            side_effect=lambda files, lod: files,
+            side_effect=lambda files, lod, folder: files,
         ), patch(
             "src.api.ogc_api.services.generate_bim_modells.CityGenericApp"
         ) as mock_app:

@@ -12,6 +12,7 @@ import datetime
 import logging
 
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
+from celery import states
 from celery.result import AsyncResult
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -48,6 +49,30 @@ PROCESS_TASKS = {
     "generate-city-model-rs": execute_generate_city_model_rs,
     "generate-dgm-model-rs": execute_generate_dgm_model_rs,
 }
+
+
+def _job_state(job: AsyncResult, jobId: str) -> str:
+    """Celery state of ``job``, tolerating unreadable failure metadata.
+
+    Reading the state rebuilds the stored exception, which raises ValueError
+    for a FAILURE result stored without ``exc_type`` (as older task versions
+    did). The job did fail in that case, so report it as failed instead of
+    letting the error surface as a 500.
+    """
+    try:
+        return job.state
+    except ValueError:
+        logger.warning("Job %s stored unreadable failure metadata", jobId)
+        return states.FAILURE
+
+
+def _job_message(job: AsyncResult) -> str:
+    """Failure detail of ``job``, or a fallback when it cannot be decoded."""
+    try:
+        info = job.info
+    except ValueError:
+        return "Task failed"
+    return str(info) if info else "Task failed"
 
 
 # Landing Page
@@ -265,6 +290,7 @@ def get_job_status(jobId: str) -> JSONResponse:
         JSONResponse: Job status and metadata information.
     """
     job = AsyncResult(jobId, app=app)
+    state = _job_state(job, jobId)
 
     # Map Celery states to OGC API states
     state_mapping = {
@@ -275,7 +301,7 @@ def get_job_status(jobId: str) -> JSONResponse:
         "REVOKED": "dismissed",
     }
 
-    status = state_mapping.get(job.state, "accepted")
+    status = state_mapping.get(state, "accepted")
 
     job_info = {
         "id": jobId,
@@ -284,10 +310,10 @@ def get_job_status(jobId: str) -> JSONResponse:
         "type": "process",
     }
 
-    if job.state == "SUCCESS" and job.result:
+    if state == "SUCCESS" and job.result:
         job_info["results"] = job.result
-    elif job.state == "FAILURE":
-        job_info["message"] = str(job.info) if job.info else "Task failed"
+    elif state == "FAILURE":
+        job_info["message"] = _job_message(job)
 
     return JSONResponse(content=job_info)
 
@@ -313,7 +339,7 @@ def cancel_job(jobId: str) -> JSONResponse:
         HTTPException: If the job cannot be cancelled.
     """
     job = AsyncResult(jobId, app=app)
-    if job.state in ["PENDING", "STARTED"]:
+    if _job_state(job, jobId) in ["PENDING", "STARTED"]:
         job.revoke(terminate=True)
         logger.info("Cancelled job %s", jobId)
         return JSONResponse(content={"message": "Job cancelled"})
@@ -342,7 +368,8 @@ def get_job_results(jobId: str) -> JSONResponse:
         HTTPException: If the job failed or is not found.
     """
     job = AsyncResult(jobId, app=app)
-    if job.state == "SUCCESS" and job.result:
+    state = _job_state(job, jobId)
+    if state == "SUCCESS" and job.result:
         model_data = job.result.get("model")
         if model_data:
             return JSONResponse(
@@ -354,8 +381,9 @@ def get_job_results(jobId: str) -> JSONResponse:
         if job.result.get("message"):
             return JSONResponse(content={"message": job.result["message"]})
         raise HTTPException(status_code=404, detail="No model data found in result")
-    elif job.state == "FAILURE":
-        logger.error("Results requested for failed job %s: %s", jobId, job.info)
-        raise HTTPException(status_code=500, detail=f"Job failed: {job.info}")
+    elif state == "FAILURE":
+        message = _job_message(job)
+        logger.error("Results requested for failed job %s: %s", jobId, message)
+        raise HTTPException(status_code=500, detail=f"Job failed: {message}")
     else:
         raise HTTPException(status_code=404, detail="Job not found or not completed")

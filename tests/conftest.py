@@ -82,38 +82,50 @@ def celery_eager_mode():
 
 @pytest.fixture
 def assert_task_failed():
-    """Assert a model-generation task recorded a FAILURE state.
+    """Assert a model-generation task fails with a readable exception.
 
-    The generation tasks catch exceptions, record a ``FAILURE`` state with a
-    metadata dict via ``update_state`` and then ``raise Ignore()`` so Celery
-    keeps that custom state (the API reads ``job.state``/``job.info``). Under
-    ``task_always_eager`` the raised ``Ignore`` surfaces as an ``IGNORED``
-    result and ``.get()`` returns ``None``, so the failure is asserted via the
-    captured ``update_state`` metadata rather than a re-raised exception.
+    The generation tasks let exceptions propagate so Celery itself records the
+    exception type and message in the result backend, which is what the API
+    reads back through ``job.state``/``job.info``. Under ``task_always_eager``
+    with ``task_eager_propagates`` the exception surfaces straight out of
+    ``.delay()``.
 
     Returns a callable ``(task, input_data, *, match=None, exc_type=None)`` that
-    runs the task eagerly and returns the captured FAILURE metadata dict.
+    runs the task eagerly and returns the raised exception. It also guards the
+    metadata invariant described below, so a task cannot go back to storing a
+    failure the API is unable to read.
     """
 
     def _run(task, input_data, *, match=None, exc_type=None):
-        with patch.object(task, "update_state") as update_state:
+        with patch.object(task, "update_state") as update_state, pytest.raises(
+            Exception
+        ) as exc_info:
             task.delay(input_data)
 
-        failure_meta = None
+        # A task may still record a FAILURE state itself, but then it must
+        # supply exc_type/exc_message: without them the result backend cannot
+        # rebuild the exception and reading the job raises ValueError, which
+        # made GET /ogc/jobs/{jobId} answer 500.
         for call in update_state.call_args_list:
             state = call.kwargs.get("state") or (call.args[0] if call.args else None)
-            if state == states.FAILURE:
-                failure_meta = call.kwargs.get("meta") or (
-                    call.args[1] if len(call.args) > 1 else None
-                )
+            if state != states.FAILURE:
+                continue
+            meta = call.kwargs.get("meta") or (
+                call.args[1] if len(call.args) > 1 else None
+            )
+            assert meta and "exc_type" in meta and "exc_message" in meta, (
+                "A manually recorded FAILURE state must carry exc_type and "
+                f"exc_message, got {meta!r}"
+            )
 
-        assert failure_meta is not None, "Task did not record a FAILURE state"
+        exc = exc_info.value
         if exc_type is not None:
-            assert failure_meta.get("exc_type") == exc_type
+            assert (
+                type(exc).__name__ == exc_type
+            ), f"expected {exc_type}, got {type(exc).__name__}"
         if match is not None:
-            message = failure_meta.get("exc_message", "")
-            assert re.search(match, message), f"{match!r} not found in {message!r}"
-        return failure_meta
+            assert re.search(match, str(exc)), f"{match!r} not found in {str(exc)!r}"
+        return exc
 
     return _run
 

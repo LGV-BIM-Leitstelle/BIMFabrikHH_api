@@ -1,15 +1,15 @@
 """
 LoD utility functions for OGC API.
 
-Hamburg CityGML tile names and local folder resolution for LoD1–3.
+Hamburg CityGML tile names and LoD folder lookup for LoD1–3. Turning a
+configured folder into one this OS can open is
+:func:`BIMFabrikHH_core.config.paths.local_dir_or_raw`.
 """
 
 import os
 import re
 from pathlib import Path
 from typing import List, Optional
-
-from BIMFabrikHH_core.config.paths import existing_local_dir
 
 from src.api.config.settings import api_settings
 
@@ -29,16 +29,6 @@ def lod_data_folder(lod_level: int) -> str:
 
 def lod_folder_url(lod_level: int) -> str:
     return f"{api_settings.DATA_BASE_URL}/{lod_data_folder(lod_level)}"
-
-
-def local_city_folder(folder_url: str) -> str:
-    """``DATA_BASE_URL`` / LoD folder, as Windows or WSL path."""
-    found = existing_local_dir(folder_url)
-    if found is not None:
-        return str(found)
-    if Path(folder_url).is_dir():
-        return folder_url
-    return folder_url
 
 
 def gml_paths_for_rust(names: List[str], folder: str) -> List[str]:

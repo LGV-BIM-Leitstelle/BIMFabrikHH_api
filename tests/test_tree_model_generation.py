@@ -12,7 +12,10 @@ import pytest
 from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
 from BIMFabrikHH_core.data_models.params_tree import Component, Container, RequestParams
 
-from src.api.ogc_api.services.generate_bim_modells import execute_generate_tree_model
+from src.api.ogc_api.services.generate_bim_modells import (
+    execute_generate_tree_model,
+    execute_generate_tree_model_rs,
+)
 
 # Integration-style tests that exercise the full task in eager mode.
 pytestmark = [pytest.mark.integration, pytest.mark.celery, pytest.mark.tree]
@@ -102,9 +105,7 @@ class TestTreeModelGeneration:
             assert "url-http" in result["model"]
             assert "url-https" in result["model"]
 
-    def test_tree_model_no_trees_found(
-        self, valid_request_params, sample_tree_data, assert_task_failed
-    ):
+    def test_tree_model_no_trees_found(self, valid_request_params, sample_tree_data):
         """Test tree model generation when no trees are found in the bounding box."""
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
@@ -116,13 +117,13 @@ class TestTreeModelGeneration:
             mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
             mock_processor.raw_data_to_dataframe.return_value = Mock(empty=True)
 
-            # Task records a FAILURE state with a ValueError about no trees
-            assert_task_failed(
-                execute_generate_tree_model,
-                valid_request_params.model_dump(),
-                match="No trees found",
-                exc_type="ValueError",
-            )
+            # An empty umring is a successful job without an IFC, not a failure
+            result = execute_generate_tree_model.delay(
+                valid_request_params.model_dump()
+            ).get()
+
+            assert result["model"] is None
+            assert "No trees found" in result["message"]
 
     def test_tree_model_exception_handling(
         self, valid_request_params, assert_task_failed
@@ -139,6 +140,26 @@ class TestTreeModelGeneration:
                 execute_generate_tree_model,
                 valid_request_params.model_dump(),
                 match="Network error",
+            )
+
+    def test_tree_model_rs_exception_handling(
+        self, valid_request_params, assert_task_failed
+    ):
+        """Test tree model (rs) generation exception handling."""
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class:
+            # Mock dependency to raise exception
+            mock_fetcher_class.fetch_tree_data.side_effect = Exception("Rust error")
+
+            # The exception must propagate so Celery stores a readable failure.
+            # Swallowing it into a FAILURE state without exc_type made
+            # GET /ogc/jobs/{jobId} answer 500 instead of the job status.
+            assert_task_failed(
+                execute_generate_tree_model_rs,
+                valid_request_params.model_dump(),
+                match="Rust error",
+                exc_type="Exception",
             )
 
     @pytest.mark.parametrize(

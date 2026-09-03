@@ -7,7 +7,6 @@ file management and helper functions.
 
 from .lod_utils import (
     gml_paths_for_rust,
-    local_city_folder,
     lod_data_folder,
     lod_folder_url,
     transform_file_names_for_lod,
@@ -15,7 +14,6 @@ from .lod_utils import (
 
 __all__ = [
     "gml_paths_for_rust",
-    "local_city_folder",
     "lod_data_folder",
     "lod_folder_url",
     "transform_file_names_for_lod",

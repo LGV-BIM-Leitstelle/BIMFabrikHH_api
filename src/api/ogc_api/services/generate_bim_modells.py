@@ -26,6 +26,7 @@ from BIMFabrikHH_core.apps.trees.processing import (
     tree_crown_detail_from_containers,
 )
 from BIMFabrikHH_core.apps.trees.column_schema import DEFAULT_OAF_SCHEMA
+from BIMFabrikHH_core.config.paths import local_dir_or_raw
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from BIMFabrikHH_core.core.data_processing import DataProcessor
 from BIMFabrikHH_core.core.georeferencing import (
@@ -36,8 +37,7 @@ from BIMFabrikHH_core.core.ogc_extractor import (
     extract_level_of_geometry,
     extract_psets_basepoint,
 )
-from celery import Celery, states
-from celery.exceptions import Ignore
+from celery import Celery
 from celery.signals import setup_logging as celery_setup_logging
 from celery.signals import task_postrun, task_revoked
 
@@ -47,7 +47,6 @@ from src.database import get_celery_config
 
 from ..utils.lod_utils import (
     gml_paths_for_rust,
-    local_city_folder,
     lod_folder_url,
     transform_file_names_for_lod,
 )
@@ -189,6 +188,13 @@ def empty_result(message: str) -> Dict[str, Any]:
     return {"message": message, "model": None}
 
 
+def dgm_folder() -> str:
+    """DGM tile directory, as a path this OS can open."""
+    return local_dir_or_raw(
+        f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
+    )
+
+
 @app.task(bind=True)
 def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -232,8 +238,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             if not tif_filenames:
                 logger.warning(NO_ELEVATION_MESSAGE)
             else:
-                dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
-                tif_path = f"{dgm_url}/{tif_filenames[0]}"
+                tif_path = f"{dgm_folder()}/{tif_filenames[0]}"
                 logger.info(
                     f"Using GeoTIFF URL for elevation (in-memory processing): {tif_path}"
                 )
@@ -294,21 +299,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         logger.exception(
             "Tree model generation failed (task %s): %s", self.request.id, e
         )
-        self.update_state(
-            state=states.FAILURE,
-            meta={
-                "exc_type": type(e).__name__,
-                "exc_message": str(e),
-                "error": f"Error generating tree model: {str(e)}",
-                "troubleshooting": [
-                    "Make sure BIMFabrikHH core package is available",
-                    "Check that all dependencies are installed",
-                    "Verify internet connection for API calls",
-                    "Try a different bounding box area",
-                ],
-            },
-        )
-        raise Ignore()
+        raise
 
 
 @app.task(bind=True)
@@ -330,8 +321,7 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         if request_params.use_dgm_elevation:
             tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
             if tif_filenames:
-                dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
-                tif_path = f"{dgm_url}/{tif_filenames[0]}"
+                tif_path = f"{dgm_folder()}/{tif_filenames[0]}"
             else:
                 logger.warning(NO_ELEVATION_MESSAGE)
         else:
@@ -380,16 +370,8 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         return ifc_result(filename)
 
     except Exception as e:
-        self.update_state(
-            state="FAILURE",
-            meta={
-                "error": f"Error generating tree model (rs): {str(e)}",
-                "troubleshooting": [
-                    "Make sure bimfabrikhh-core-rs is installed in the worker environment",
-                    "Check that BIMFabrikHH_core is available",
-                    "Try a different bounding box area",
-                ],
-            },
+        logger.exception(
+            "Tree model generation (rs) failed (task %s): %s", self.request.id, e
         )
         raise
 
@@ -438,14 +420,17 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
                 "LoD3 is only available on generate-city-model-rs."
             )
 
-        folder_url = lod_folder_url(lod_level)
-        logger.info(f"Using LoD{lod_level} directory: {folder_url}")
+        # Resolve the folder once: the tile extension is picked by probing the
+        # directory, so that probe and the read below must use the same,
+        # OS-openable form. Hamburg ships LoD1 as .xml but LoD2 as .gml.
+        local_folder = local_dir_or_raw(lod_folder_url(lod_level))
+        logger.info(f"Using LoD{lod_level} directory: {local_folder}")
 
         self.update_state(state="PROGRESS", meta={"percent": 50})
 
         # Transform file names if needed
         transformed_gml_files = transform_file_names_for_lod(
-            gml_files, lod_level, folder_url
+            gml_files, lod_level, local_folder
         )
         logger.info(f"Using CityGML tiles: {transformed_gml_files}")
 
@@ -456,7 +441,7 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         ifc_path = CityGenericApp.from_gml_files(
             transformed_gml_files,
             request_params=request_params,
-            folder_path=folder_url,
+            folder_path=local_folder,
             output_path=output_path,
         )
         if ifc_path is None:
@@ -475,21 +460,7 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         logger.exception(
             "City model generation failed (task %s): %s", self.request.id, e
         )
-        self.update_state(
-            state=states.FAILURE,
-            meta={
-                "exc_type": type(e).__name__,
-                "exc_message": str(e),
-                "error": f"Error generating city model: {str(e)}",
-                "troubleshooting": [
-                    "Make sure BIMFabrikHH core package is available",
-                    "Check that all dependencies are installed",
-                    "Verify data directory structure",
-                    "Try a smaller bounding box area",
-                ],
-            },
-        )
-        raise Ignore()
+        raise
 
 
 @app.task(bind=True)
@@ -507,12 +478,15 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
             raise ValueError(TILE_LIMIT_MESSAGE)
 
         lod_level = extract_level_of_geometry(request_params.containers)
-        folder_url = lod_folder_url(lod_level)
-        logger.info(f"Using LoD{lod_level} directory: {folder_url}")
+        # Resolve the folder once: the tile extension is picked by probing the
+        # directory, so that probe and the final paths must use the same,
+        # OS-openable form. Hamburg ships LoD1 as .xml but LoD2 as .gml.
+        local_folder = local_dir_or_raw(lod_folder_url(lod_level))
+        logger.info(f"Using LoD{lod_level} directory: {local_folder}")
 
         self.update_state(state="PROGRESS", meta={"percent": 50})
         transformed_gml_files = transform_file_names_for_lod(
-            gml_files, lod_level, folder_url
+            gml_files, lod_level, local_folder
         )
         logger.info(f"Using CityGML tiles: {transformed_gml_files}")
 
@@ -521,9 +495,7 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         )
         output_path = OUTPUT_FOLDER / filename
 
-        gml_paths = gml_paths_for_rust(
-            transformed_gml_files, local_city_folder(folder_url)
-        )
+        gml_paths = gml_paths_for_rust(transformed_gml_files, local_folder)
         ifc_path = CityRustApp.from_gml_files(
             gml_paths,
             request_params=request_params,
@@ -538,15 +510,8 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         return ifc_result(filename)
 
     except Exception as e:
-        self.update_state(
-            state="FAILURE",
-            meta={
-                "error": f"Error generating city model (rs): {str(e)}",
-                "troubleshooting": [
-                    "Make sure bimfabrikhh-core-rs is installed in the worker environment",
-                    "Try a smaller bounding box area",
-                ],
-            },
+        logger.exception(
+            "City model generation (rs) failed (task %s): %s", self.request.id, e
         )
         raise
 
@@ -578,9 +543,6 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         if len(tif_filenames) > 4:
             raise ValueError(TILE_LIMIT_MESSAGE)
 
-        # DGM URL
-        dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
-
         # Generate output path
         filename = (
             f"DGM_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
@@ -590,7 +552,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         ifc_path = TerrainGenericApp.from_geotiffs(
             tif_filenames,
             request_params=request_params,
-            folder_path=dgm_url,
+            folder_path=dgm_folder(),
             output_path=output_path,
         )
         if ifc_path is None:
@@ -621,8 +583,6 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
         if len(tif_filenames) > 4:
             raise ValueError(TILE_LIMIT_MESSAGE)
 
-        dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
-
         filename = (
             f"DGM_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
         )
@@ -631,7 +591,7 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
         ifc_path = TerrainRustApp.from_geotiffs(
             tif_filenames,
             request_params=request_params,
-            folder_path=dgm_url,
+            folder_path=dgm_folder(),
             output_path=output_path,
         )
         if ifc_path is None:
@@ -640,5 +600,7 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
         return ifc_result(filename)
 
     except Exception as e:
-        logger.error(f"DGM generation (rs) failed: {e}")
+        logger.exception(
+            "DGM model generation (rs) failed (task %s): %s", self.request.id, e
+        )
         raise
