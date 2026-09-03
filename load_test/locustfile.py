@@ -65,9 +65,12 @@ DEFAULT_HOST = "http://localhost:8081"
 
 # OGC processes under test. Each task picks one of these with equal weight.
 PROCESS_IDS = (
-    "generate-tree-model",
-    "generate-city-model",
-    "generate-dgm-model",
+    # "generate-tree-model",
+    # "generate-city-model",
+    # "generate-dgm-model",
+    "generate-tree-model-rs",
+    "generate-city-model-rs",
+    "generate-dgm-model-rs",
 )
 
 # Bounding box randomization.
@@ -103,7 +106,7 @@ CENTER_MEAN_LAT = 53.550603
 #
 # The default area and the aspect ratio reproduce the original hard-coded box
 # (~218 m x ~156 m => ~0.034 km², width:height ~1.40) at the anchor latitude.
-DEFAULT_BASE_AREA_KM2 = 0.034
+DEFAULT_BASE_AREA_KM2 = 1  # 0.034
 BASE_ASPECT_RATIO = 1.40  # base width (lon) / base height (lat), in meters
 
 # Center: standard deviation of the Gaussian jitter, in meters (isotropic).
@@ -204,7 +207,7 @@ def _make_bbox(base_width_deg: float, base_height_deg: float) -> dict:
 
 
 # Job polling behaviour.
-POLL_INTERVAL_SECONDS = 5.0
+POLL_INTERVAL_SECONDS = 2  # 0.5  # 5.0
 POLL_TIMEOUT_SECONDS = 300.0
 
 # Terminal OGC job states.
@@ -214,6 +217,7 @@ _TERMINAL_STATES = frozenset({"successful", "failed", "dismissed"})
 # and job-completion names are per-process so the stats table breaks results
 # down by process; job-status polling is grouped under a single name.
 _NAME_JOB_STATUS = "GET /ogc/jobs/[jobId]"
+_NAME_JOB_CANCEL = "DELETE /ogc/jobs/[jobId]"
 
 
 def _name_execute(process_id: str) -> str:
@@ -222,6 +226,46 @@ def _name_execute(process_id: str) -> str:
 
 def _name_job_completion(process_id: str) -> str:
     return f"job completion (end-to-end) [{process_id}]"
+
+
+# Cap the response body echoed into failure messages so a large/HTML error page
+# (e.g. a Traefik 502) does not flood the Locust stats/log output.
+_RESPONSE_SNIPPET_LIMIT = 500
+
+
+def _response_snippet(resp) -> str:
+    """Return a trimmed, single-line snippet of a response body for diagnostics.
+
+    Prefers the raw text; falls back to a placeholder when the body is empty or
+    cannot be decoded. Newlines are collapsed so the message stays on one line
+    in the Locust stats table.
+    """
+    try:
+        text = resp.text or ""
+    except Exception:  # noqa: BLE001 - body may be unreadable on transport errors
+        return "<unreadable body>"
+    text = " ".join(text.split())
+    if not text:
+        return "<empty body>"
+    if len(text) > _RESPONSE_SNIPPET_LIMIT:
+        return f"{text[:_RESPONSE_SNIPPET_LIMIT]}… (+{len(text) - _RESPONSE_SNIPPET_LIMIT} chars)"
+    return text
+
+
+def _content_type(resp) -> str | None:
+    """Best-effort ``Content-Type`` lookup across Locust HTTP client types.
+
+    ``FastHttpUser`` (geventhttpclient ``FastResponse``) exposes headers, but
+    the accessor differs from ``requests``; guard against both missing headers
+    and unexpected header container types.
+    """
+    headers = getattr(resp, "headers", None)
+    if headers is None:
+        return None
+    try:
+        return headers.get("Content-Type")
+    except Exception:  # noqa: BLE001 - header container may not be a mapping
+        return None
 
 
 # Thread-safe unique-IP generator. Mapped into the 100.64.0.0/10 CGNAT range so
@@ -338,6 +382,9 @@ class OGCProcessUser(FastHttpUser):
         while True:
             elapsed = time.monotonic() - start
             if elapsed > POLL_TIMEOUT_SECONDS:
+                # Dismiss the job so a timed-out (still queued/running) job does
+                # not keep occupying the worker/queue after we stop polling.
+                self._cancel_job(job_id)
                 self._report_completion(
                     process_id,
                     elapsed,
@@ -383,7 +430,10 @@ class OGCProcessUser(FastHttpUser):
             catch_response=True,
         ) as resp:
             if resp.status_code != 200:
-                resp.failure(f"Unexpected status {resp.status_code} polling job")
+                resp.failure(
+                    f"Unexpected status {resp.status_code} polling job "
+                    f"{_response_snippet(resp)}"
+                )
                 return None, None
             try:
                 body = resp.json()
@@ -395,6 +445,26 @@ class OGCProcessUser(FastHttpUser):
 
             resp.success()
             return status, message
+
+    def _cancel_job(self, job_id: str) -> None:
+        """Dismiss a job via ``DELETE`` after a client-side poll timeout.
+
+        Keeps timed-out jobs from cluttering the queue/worker once we stop
+        polling. A ``200`` confirms the revoke; a ``400`` means the job already
+        reached a terminal state between the last poll and this call (a benign
+        race), so both are treated as expected rather than load-test failures.
+        """
+        with self.client.request(
+            "DELETE",
+            f"/ogc/jobs/{job_id}",
+            headers={"Accept": "application/json"},
+            name=_NAME_JOB_CANCEL,
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 400):
+                resp.success()
+            else:
+                resp.failure(f"Unexpected status {resp.status_code} cancelling job")
 
     def _report_completion(
         self, process_id: str, duration_seconds: float, success: bool, error: str | None
