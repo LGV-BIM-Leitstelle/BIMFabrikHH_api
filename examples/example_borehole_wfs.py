@@ -40,7 +40,7 @@ def main():
     root = DataFetcher.fetch_borehole_data(BBOX)
     end_time = perf_counter()
 
-    print(f"Ausführungszeit: {end_time - start_time} Sekunden")
+    print(f"Time to fetch borehole data: {end_time - start_time} seconds.")
 
     # Find all WFS members
     members = root.xpath(
