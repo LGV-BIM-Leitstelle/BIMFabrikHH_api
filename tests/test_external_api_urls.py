@@ -50,7 +50,7 @@ HAMBURG_HAFEN_BBOX: Dict[str, float] = {
 }
 
 # Small bounding box with 4 boreholes.
-BBOX: Dict[str, float] = {
+HAMBURG_BOREHOLE_BBOX: Dict[str, float] = {
     "min_x": 9.9861, 
     "min_y": 53.4867, 
     "max_x": 9.9872, 
