@@ -6,6 +6,7 @@ configured folder into one this OS can open is
 :func:`BIMFabrikHH_core.config.paths.local_dir_or_raw`.
 """
 
+import glob
 import os
 import re
 from pathlib import Path
@@ -35,13 +36,66 @@ def gml_paths_for_rust(names: List[str], folder: str) -> List[str]:
     return [name if Path(name).is_file() else str(Path(folder) / name) for name in names]
 
 
-def _lod3_citygrid_name(lod1_name: str) -> str:
-    """``LoD1_32_566_5927_1_HH.xml`` → CityGRID ``6627.gml`` (1 km cell)."""
+def _lod3_citygrid_stem(lod1_name: str) -> Optional[str]:
+    """LoD1 DK5 name → CityGRID 4-digit cell stem, e.g. ``6627``.
+
+    ``LoD1_32_566_5927_1_HH.xml`` → ``6627`` (east−500, north−5900). Returns
+    ``None`` when ``lod1_name`` is not a LoD1 DK5 tile name.
+    """
     match = _LOD1_TILE.match(lod1_name)
     if match is None:
-        return lod1_name
+        return None
     east_km, north_km = int(match.group(1)), int(match.group(2))
-    return f"{east_km - 500:02d}{north_km - 5900:02d}.gml"
+    return f"{east_km - 500:02d}{north_km - 5900:02d}"
+
+
+def _lod3_files_for_stem(stem: str, folder_path: str) -> List[str]:
+    """Every CityGRID file for a 1 km cell ``stem`` in a local ``folder_path``.
+
+    Hamburg delivers LoD3 both as plain ``NNNN.gml`` cells and as suffixed
+    update packages (``NNNN_LoD3-HH_Area4_2024_10_10.gml``) whose extent bleeds
+    across the nominal cell. A cell the umring touches must pull in all of them,
+    otherwise buildings modelled only in an update file are silently dropped.
+    """
+    matches: List[str] = []
+    for pattern in (f"{stem}.gml", f"{stem}.xml", f"{stem}_*.gml", f"{stem}_*.xml"):
+        for path in glob.glob(os.path.join(folder_path, pattern)):
+            matches.append(os.path.basename(path))
+    return sorted(set(matches))
+
+
+def _lod3_tile_names(tile_names: List[str], folder_path: Optional[str]) -> List[str]:
+    """Resolve LoD3 CityGRID file names for the cells the umring touches.
+
+    Locally, each touched cell expands to every matching CityGRID file (the
+    plain cell plus any suffixed update packages). A remote folder has no
+    listing to enumerate, so fall back to the plain ``NNNN.gml`` name.
+    """
+    is_local = bool(folder_path) and not folder_path.startswith(("http://", "https://"))
+    resolved: List[str] = []
+    seen: set = set()
+
+    def _add(name: str) -> None:
+        if name not in seen:
+            seen.add(name)
+            resolved.append(name)
+
+    for name in tile_names:
+        stem = _lod3_citygrid_stem(name)
+        if stem is None:
+            _add(name)
+            continue
+        matches = (
+            _lod3_files_for_stem(stem, folder_path)  # type: ignore[arg-type]
+            if is_local
+            else []
+        )
+        if matches:
+            for match in matches:
+                _add(match)
+        else:
+            _add(f"{stem}.gml")
+    return resolved
 
 
 def transform_file_names_for_lod(
@@ -53,7 +107,9 @@ def transform_file_names_for_lod(
     Transform file names to match the LoD level being used.
 
     Tile fetch always returns LoD1 DK5 names. LoD2 keeps that pattern with a
-    prefix swap. LoD3 CityGRID tiles are ``{east-500}{north-5900}.gml``.
+    prefix swap. LoD3 CityGRID cells are ``{east-500}{north-5900}`` and, when
+    the folder is local, each cell expands to every matching file: the plain
+    ``NNNN.gml`` plus any suffixed update packages (see :func:`_lod3_tile_names`).
 
     Hamburg's tiles are stored with either a ``.xml`` or ``.gml`` extension
     When ``folder_path`` is a local directory, each tile is resolved to whichever
@@ -87,12 +143,12 @@ def transform_file_names_for_lod(
                 transformed_names.append(name.replace("LoD1_", "LoD2_"))
             else:
                 transformed_names.append(name)
-    elif lod_level == 3:
-        transformed_names = [_lod3_citygrid_name(name) for name in tile_names]
-    else:
-        transformed_names = list(tile_names)
+        return _resolve_tile_extensions(transformed_names, folder_path)
 
-    return _resolve_tile_extensions(transformed_names, folder_path)
+    if lod_level == 3:
+        return _lod3_tile_names(tile_names, folder_path)
+
+    return _resolve_tile_extensions(list(tile_names), folder_path)
 
 
 def _resolve_tile_extensions(
