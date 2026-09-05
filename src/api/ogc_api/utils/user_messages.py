@@ -3,7 +3,11 @@
 from typing import FrozenSet
 
 TILE_LIMIT_MESSAGE = (
-    "Die Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. "
+    "Die Anzahl der Kacheln überschreitet die Grenze von 6 Kacheln. "
+    "Bitte zeichnen Sie einen kleineren Umring."
+)
+AREA_LIMIT_MESSAGE = (
+    "Der gewählte Umring ist größer als 1 km². "
     "Bitte zeichnen Sie einen kleineren Umring."
 )
 NO_TREE_DATA_MESSAGE = (
@@ -73,6 +77,7 @@ def process_not_found_message(process_id: str) -> str:
 _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
     {
         TILE_LIMIT_MESSAGE,
+        AREA_LIMIT_MESSAGE,
         NO_TREE_DATA_MESSAGE,
         NO_TREES_MESSAGE,
         NO_BUILDINGS_MESSAGE,

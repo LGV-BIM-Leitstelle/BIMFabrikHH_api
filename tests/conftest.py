@@ -307,28 +307,12 @@ def too_many_tiles_scenarios():
     """Scenarios with too many tiles for testing."""
     return {
         "city_tiles": [
-            ["file1.xml", "file2.xml", "file3.xml", "file4.xml", "file5.xml"],
-            ["file1.xml"] * 10,  # 10 files
-            [
-                "file1.xml",
-                "file2.xml",
-                "file3.xml",
-                "file4.xml",
-                "file5.xml",
-                "file6.xml",
-            ],  # 6 files
+            [f"file{i}.xml" for i in range(7)],
+            ["file1.xml"] * 10,
         ],
         "dgm_tiles": [
-            ["file1.tif", "file2.tif", "file3.tif", "file4.tif", "file5.tif"],
-            ["file1.tif"] * 8,  # 8 files
-            [
-                "file1.tif",
-                "file2.tif",
-                "file3.tif",
-                "file4.tif",
-                "file5.tif",
-                "file6.tif",
-            ],  # 6 files
+            [f"file{i}.tif" for i in range(7)],
+            ["file1.tif"] * 8,
         ],
     }
 

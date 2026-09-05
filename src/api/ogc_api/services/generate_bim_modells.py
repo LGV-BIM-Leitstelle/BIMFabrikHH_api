@@ -50,6 +50,7 @@ from ..utils.lod_utils import (
     lod_folder_url,
     transform_file_names_for_lod,
 )
+from ..utils.umring_limits import ensure_bbox_area, ensure_tile_count
 from ..utils.user_messages import (
     LOD3_ONLY_ON_RS_MESSAGE,
     NO_BUILDINGS_MESSAGE,
@@ -57,7 +58,6 @@ from ..utils.user_messages import (
     NO_TREE_DATA_MESSAGE,
     NO_TREES_MESSAGE,
     TERRAIN_IFC_FAILED_MESSAGE,
-    TILE_LIMIT_MESSAGE,
     TREES_IFC_FAILED_MESSAGE,
     to_user_error,
 )
@@ -211,6 +211,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
     logger.info("Input data for tree model generation: %s", input_data)
     try:
         request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
@@ -304,6 +305,7 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
     self.update_state(state="PROGRESS", meta={"percent": 0})
     try:
         request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
@@ -393,14 +395,14 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
     logger.info("Starting city model generation (task %s)", self.request.id)
     try:
         request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
 
         # Fetch tile information using API package
         gml_files = DataFetcher.fetch_citymodel_tiles(bbox_dict)
-        if len(gml_files) > 4:
-            raise ValueError(TILE_LIMIT_MESSAGE)
+        ensure_tile_count(len(gml_files))
 
         # Debug: log ALL containers being sent
         containers = request_params.containers or []
@@ -463,13 +465,13 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
     self.update_state(state="PROGRESS", meta={"percent": 0})
     try:
         request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
 
         gml_files = DataFetcher.fetch_citymodel_tiles(bbox_dict)
-        if len(gml_files) > 4:
-            raise ValueError(TILE_LIMIT_MESSAGE)
+        ensure_tile_count(len(gml_files))
 
         lod_level = extract_level_of_geometry(request_params.containers)
         # Resolve the folder once: the tile extension is picked by probing the
@@ -525,6 +527,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
     try:
         # Extract request parameters
         request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
         bbox_dict = bbox_to_dict(request_params)
 
         # Fetch tile information using API package
@@ -533,9 +536,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
             logger.info(NO_TERRAIN_MESSAGE)
             return empty_result(NO_TERRAIN_MESSAGE)
 
-        # Check tile limit
-        if len(tif_filenames) > 4:
-            raise ValueError(TILE_LIMIT_MESSAGE)
+        ensure_tile_count(len(tif_filenames))
 
         # Generate output path
         filename = (
@@ -568,14 +569,14 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
     """Same GeoTIFF fetch as generate-dgm-model; mesh in Python, IFC via TerrainRustApp."""
     try:
         request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
         bbox_dict = bbox_to_dict(request_params)
 
         tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
         if not tif_filenames:
             logger.info(NO_TERRAIN_MESSAGE)
             return empty_result(NO_TERRAIN_MESSAGE)
-        if len(tif_filenames) > 4:
-            raise ValueError(TILE_LIMIT_MESSAGE)
+        ensure_tile_count(len(tif_filenames))
 
         filename = (
             f"DGM_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"

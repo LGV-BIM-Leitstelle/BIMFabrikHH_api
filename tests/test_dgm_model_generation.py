@@ -98,16 +98,8 @@ class TestDGMModelGeneration:
     @pytest.mark.parametrize(
         "too_many_tiles",
         [
-            ["file1.tif", "file2.tif", "file3.tif", "file4.tif", "file5.tif"],
-            ["file1.tif"] * 8,  # 8 files
-            [
-                "file1.tif",
-                "file2.tif",
-                "file3.tif",
-                "file4.tif",
-                "file5.tif",
-                "file6.tif",
-            ],  # 6 files
+            [f"file{i}.tif" for i in range(7)],
+            ["file1.tif"] * 8,
         ],
     )
     def test_dgm_model_too_many_tiles(self, valid_dgm_request_params, too_many_tiles):

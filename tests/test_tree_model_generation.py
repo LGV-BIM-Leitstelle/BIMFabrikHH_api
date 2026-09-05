@@ -17,6 +17,7 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_tree_model_rs,
 )
 from src.api.ogc_api.utils.user_messages import (
+    AREA_LIMIT_MESSAGE,
     NO_TREES_MESSAGE,
     UNEXPECTED_ERROR_MESSAGE,
 )
@@ -128,6 +129,26 @@ class TestTreeModelGeneration:
 
             assert result["model"] is None
             assert result["message"] == NO_TREES_MESSAGE
+
+    def test_tree_model_area_limit(self, valid_request_params, assert_task_failed):
+        """A bbox larger than 1 km² is rejected before tree data is fetched."""
+        payload = valid_request_params.model_dump()
+        payload["bbox"] = {
+            "min_x": 9.96,
+            "min_y": 53.54,
+            "max_x": 10.00,
+            "max_y": 53.56,
+        }
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class:
+            assert_task_failed(
+                execute_generate_tree_model,
+                payload,
+                match=AREA_LIMIT_MESSAGE,
+                exc_type="ValueError",
+            )
+            mock_fetcher_class.fetch_tree_data.assert_not_called()
 
     def test_tree_model_exception_handling(
         self, valid_request_params, assert_task_failed

@@ -16,6 +16,7 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_city_model_rs,
 )
 from src.api.ogc_api.utils.user_messages import (
+    AREA_LIMIT_MESSAGE,
     NO_BUILDINGS_MESSAGE,
     TILE_LIMIT_MESSAGE,
     UNEXPECTED_ERROR_MESSAGE,
@@ -108,16 +109,8 @@ class TestCityModelGeneration:
     @pytest.mark.parametrize(
         "too_many_tiles",
         [
-            ["file1.xml", "file2.xml", "file3.xml", "file4.xml", "file5.xml"],
-            ["file1.xml"] * 10,  # 10 files
-            [
-                "file1.xml",
-                "file2.xml",
-                "file3.xml",
-                "file4.xml",
-                "file5.xml",
-                "file6.xml",
-            ],  # 6 files
+            [f"file{i}.xml" for i in range(7)],
+            ["file1.xml"] * 10,
         ],
     )
     def test_city_model_too_many_tiles(
@@ -137,6 +130,26 @@ class TestCityModelGeneration:
                 match=TILE_LIMIT_MESSAGE,
                 exc_type="ValueError",
             )
+
+    def test_city_model_area_limit(self, valid_city_request_params, assert_task_failed):
+        """A bbox larger than 1 km² is rejected before tiles are fetched."""
+        payload = valid_city_request_params.model_dump()
+        payload["bbox"] = {
+            "min_x": 9.96,
+            "min_y": 53.54,
+            "max_x": 10.00,
+            "max_y": 53.56,
+        }
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class:
+            assert_task_failed(
+                execute_generate_city_model,
+                payload,
+                match=AREA_LIMIT_MESSAGE,
+                exc_type="ValueError",
+            )
+            mock_fetcher_class.fetch_citymodel_tiles.assert_not_called()
 
     def test_city_model_exception_handling(
         self, valid_city_request_params, assert_task_failed

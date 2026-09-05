@@ -3,6 +3,7 @@
 import pytest
 
 from src.api.ogc_api.utils.user_messages import (
+    AREA_LIMIT_MESSAGE,
     INVALID_INPUT_MESSAGE,
     NO_BUILDINGS_MESSAGE,
     NO_TREES_MESSAGE,
@@ -17,6 +18,7 @@ from src.api.ogc_api.utils.user_messages import (
     "incoming, expected",
     [
         (ValueError(TILE_LIMIT_MESSAGE), TILE_LIMIT_MESSAGE),
+        (ValueError(AREA_LIMIT_MESSAGE), AREA_LIMIT_MESSAGE),
         (ValueError(NO_BUILDINGS_MESSAGE), NO_BUILDINGS_MESSAGE),
         (RuntimeError("no buildings parsed from CityGML"), NO_BUILDINGS_MESSAGE),
         (RuntimeError("no trees to write"), NO_TREES_MESSAGE),

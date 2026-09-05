@@ -134,7 +134,7 @@ TEST_SCENARIOS = {
     },
     "too_many_tiles": {
         "input": VALID_INPUT_DATA,
-        "tiles": ["file1.xml", "file2.xml", "file3.xml", "file4.xml", "file5.xml"],
+        "tiles": [f"file{i}.xml" for i in range(7)],
         "expected_exception": "ValueError",
         "expected_message": TILE_LIMIT_MESSAGE,
     },
