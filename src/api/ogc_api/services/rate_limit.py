@@ -15,11 +15,12 @@ BIM-Leitstelle, Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>
 import logging
 
 import redis.asyncio as redis_asyncio
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
 
 from src.api.config.settings import api_settings, rate_limit_enabled
+from src.api.ogc_api.utils.user_messages import RATE_LIMIT_MESSAGE
 
 from .client_identity import get_client_identifier
 
@@ -84,4 +85,11 @@ async def execution_rate_limit(request: Request, response: Response) -> None:
             "FastAPILimiter not initialized; skipping rate limit for this request"
         )
         return
-    await _execution_rate_limiter(request, response)
+    try:
+        await _execution_rate_limiter(request, response)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            raise HTTPException(
+                status_code=429, detail=RATE_LIMIT_MESSAGE
+            ) from exc
+        raise

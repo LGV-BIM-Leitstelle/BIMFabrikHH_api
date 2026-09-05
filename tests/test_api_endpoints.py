@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api.web_app import create_app
+from src.api.ogc_api.utils.user_messages import JOB_FAILED_FALLBACK_MESSAGE
 
 
 @pytest.fixture(scope="module")
@@ -372,7 +373,7 @@ class TestJobStatusEndpoints:
 
         data = response.json()
         assert data["status"] == "failed"
-        assert data["message"] == "Task failed"
+        assert data["message"] == JOB_FAILED_FALLBACK_MESSAGE
 
     @patch("src.api.ogc_api.routes.main_ogc.AsyncResult")
     def test_get_job_status_success(self, mock_async_result, client):

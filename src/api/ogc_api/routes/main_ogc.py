@@ -35,6 +35,15 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_tree_model_rs,
 )
 from src.api.ogc_api.services.rate_limit import execution_rate_limit
+from src.api.ogc_api.utils.user_messages import (
+    JOB_CANCELLED_MESSAGE,
+    JOB_CANNOT_CANCEL_MESSAGE,
+    JOB_FAILED_FALLBACK_MESSAGE,
+    JOB_LISTING_UNAVAILABLE_MESSAGE,
+    JOB_NOT_READY_MESSAGE,
+    NO_MODEL_IN_RESULT_MESSAGE,
+    process_not_found_message,
+)
 
 router_ogc = APIRouter()
 
@@ -71,8 +80,8 @@ def _job_message(job: AsyncResult) -> str:
     try:
         info = job.info
     except ValueError:
-        return "Task failed"
-    return str(info) if info else "Task failed"
+        return JOB_FAILED_FALLBACK_MESSAGE
+    return str(info) if info else JOB_FAILED_FALLBACK_MESSAGE
 
 
 # Landing Page
@@ -148,7 +157,9 @@ def get_process(processID: str) -> JSONResponse:
     """
     description = PROCESS_DEFINITIONS.get(processID)
     if description is None:
-        raise HTTPException(status_code=404, detail=f"Process {processID} not found")
+        raise HTTPException(
+            status_code=404, detail=process_not_found_message(processID)
+        )
     return JSONResponse(content=description)
 
 
@@ -175,7 +186,7 @@ def get_jobs() -> JSONResponse:
     return JSONResponse(
         content={
             "jobs": [],
-            "message": "Job listing not implemented with current Celery backend",
+            "message": JOB_LISTING_UNAVAILABLE_MESSAGE,
         }
     )
 
@@ -218,7 +229,9 @@ def execute_process(
     """
     task_fn = PROCESS_TASKS.get(processID)
     if task_fn is None:
-        raise HTTPException(status_code=404, detail=f"Process {processID} not found")
+        raise HTTPException(
+            status_code=404, detail=process_not_found_message(processID)
+        )
 
     # Determine the client identifier.
     client_id = get_client_identifier(request)
@@ -342,9 +355,9 @@ def cancel_job(jobId: str) -> JSONResponse:
     if _job_state(job, jobId) in ["PENDING", "STARTED"]:
         job.revoke(terminate=True)
         logger.info("Cancelled job %s", jobId)
-        return JSONResponse(content={"message": "Job cancelled"})
+        return JSONResponse(content={"message": JOB_CANCELLED_MESSAGE})
     else:
-        raise HTTPException(status_code=400, detail="Job cannot be cancelled")
+        raise HTTPException(status_code=400, detail=JOB_CANNOT_CANCEL_MESSAGE)
 
 
 # Get Job Results
@@ -380,10 +393,10 @@ def get_job_results(jobId: str) -> JSONResponse:
             )
         if job.result.get("message"):
             return JSONResponse(content={"message": job.result["message"]})
-        raise HTTPException(status_code=404, detail="No model data found in result")
+        raise HTTPException(status_code=404, detail=NO_MODEL_IN_RESULT_MESSAGE)
     elif state == "FAILURE":
         message = _job_message(job)
         logger.error("Results requested for failed job %s: %s", jobId, message)
-        raise HTTPException(status_code=500, detail=f"Job failed: {message}")
+        raise HTTPException(status_code=500, detail=message)
     else:
-        raise HTTPException(status_code=404, detail="Job not found or not completed")
+        raise HTTPException(status_code=404, detail=JOB_NOT_READY_MESSAGE)

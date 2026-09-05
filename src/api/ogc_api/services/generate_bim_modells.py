@@ -50,6 +50,17 @@ from ..utils.lod_utils import (
     lod_folder_url,
     transform_file_names_for_lod,
 )
+from ..utils.user_messages import (
+    LOD3_ONLY_ON_RS_MESSAGE,
+    NO_BUILDINGS_MESSAGE,
+    NO_TERRAIN_MESSAGE,
+    NO_TREE_DATA_MESSAGE,
+    NO_TREES_MESSAGE,
+    TERRAIN_IFC_FAILED_MESSAGE,
+    TILE_LIMIT_MESSAGE,
+    TREES_IFC_FAILED_MESSAGE,
+    to_user_error,
+)
 from .http_requests import DataFetcher
 
 # Output folder for generated IFC files
@@ -139,21 +150,6 @@ def _on_task_revoked(request: Any = None, **kwargs: Any) -> None:
     _release_admission_slot(task_id)
 
 
-# Messages shared by the generic and the Rust variant of a model type.
-TILE_LIMIT_MESSAGE = (
-    "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. "
-    "Bitte wählen Sie einen Umring erneut."
-)
-NO_TREE_DATA_MESSAGE = "No tree data found in the specified bounding box"
-NO_TREES_MESSAGE = (
-    "No trees found in the specified bounding box. "
-    "Please try a different area or check your coordinates."
-)
-NO_BUILDINGS_MESSAGE = (
-    "No buildings found in the specified bounding box. "
-    "Please try a different area or check your coordinates."
-)
-NO_TERRAIN_MESSAGE = "No terrain data found for the specified bounding box"
 NO_ELEVATION_MESSAGE = (
     "No terrain data found for the specified bounding box - "
     "proceeding without elevation data"
@@ -299,7 +295,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         logger.exception(
             "Tree model generation failed (task %s): %s", self.request.id, e
         )
-        raise
+        raise to_user_error(e) from e
 
 
 @app.task(bind=True)
@@ -364,7 +360,7 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
             records, output_path=output_path, basepoint_origin=basepoint
         )
         if written is None:
-            raise ValueError("Failed to generate IFC data from trees")
+            raise ValueError(TREES_IFC_FAILED_MESSAGE)
 
         self.update_state(state="PROGRESS", meta={"percent": 100})
         return ifc_result(filename)
@@ -373,7 +369,7 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         logger.exception(
             "Tree model generation (rs) failed (task %s): %s", self.request.id, e
         )
-        raise
+        raise to_user_error(e) from e
 
 
 @app.task(bind=True)
@@ -416,9 +412,7 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         lod_level = extract_level_of_geometry(request_params.containers)
         logger.info(f"Extracted LoD level: {lod_level}")
         if lod_level == 3:
-            raise ValueError(
-                "LoD3 is only available on generate-city-model-rs."
-            )
+            raise ValueError(LOD3_ONLY_ON_RS_MESSAGE)
 
         # Resolve the folder once: the tile extension is picked by probing the
         # directory, so that probe and the read below must use the same,
@@ -460,7 +454,7 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         logger.exception(
             "City model generation failed (task %s): %s", self.request.id, e
         )
-        raise
+        raise to_user_error(e) from e
 
 
 @app.task(bind=True)
@@ -513,7 +507,7 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         logger.exception(
             "City model generation (rs) failed (task %s): %s", self.request.id, e
         )
-        raise
+        raise to_user_error(e) from e
 
 
 @app.task(bind=True)
@@ -556,7 +550,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
             output_path=output_path,
         )
         if ifc_path is None:
-            raise ValueError("Failed to generate IFC data from terrain")
+            raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)
 
         logger.info(
             "DGM model generated successfully: %s (task %s)", filename, self.request.id
@@ -566,7 +560,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
     except Exception as e:
         # Log the error and re-raise so Celery marks task as failed
         logger.exception("DGM generation failed (task %s): %s", self.request.id, e)
-        raise
+        raise to_user_error(e) from e
 
 
 @app.task(bind=True)
@@ -595,7 +589,7 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
             output_path=output_path,
         )
         if ifc_path is None:
-            raise ValueError("Failed to generate IFC data from terrain")
+            raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)
 
         return ifc_result(filename)
 
@@ -603,4 +597,4 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
         logger.exception(
             "DGM model generation (rs) failed (task %s): %s", self.request.id, e
         )
-        raise
+        raise to_user_error(e) from e

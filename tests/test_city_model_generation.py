@@ -15,6 +15,11 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_city_model,
     execute_generate_city_model_rs,
 )
+from src.api.ogc_api.utils.user_messages import (
+    NO_BUILDINGS_MESSAGE,
+    TILE_LIMIT_MESSAGE,
+    UNEXPECTED_ERROR_MESSAGE,
+)
 
 # Integration-style tests that exercise the full task in eager mode.
 pytestmark = [pytest.mark.integration, pytest.mark.celery, pytest.mark.city]
@@ -129,7 +134,7 @@ class TestCityModelGeneration:
             assert_task_failed(
                 execute_generate_city_model,
                 valid_city_request_params.model_dump(),
-                match="Anzahl der Kacheln überschreitet die Grenze",
+                match=TILE_LIMIT_MESSAGE,
                 exc_type="ValueError",
             )
 
@@ -149,7 +154,8 @@ class TestCityModelGeneration:
             assert_task_failed(
                 execute_generate_city_model,
                 valid_city_request_params.model_dump(),
-                match="Processing error",
+                match=UNEXPECTED_ERROR_MESSAGE,
+                exc_type="ValueError",
             )
 
     def test_city_model_rs_exception_handling(
@@ -170,8 +176,38 @@ class TestCityModelGeneration:
             assert_task_failed(
                 execute_generate_city_model_rs,
                 valid_city_request_params.model_dump(),
-                match="Rust error",
-                exc_type="Exception",
+                match=UNEXPECTED_ERROR_MESSAGE,
+                exc_type="ValueError",
+            )
+
+    def test_city_model_rs_no_buildings_ui_message(
+        self, valid_city_request_params, sample_city_tiles, assert_task_failed
+    ):
+        """Rust empty-parse is mapped to the UI no-buildings message."""
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class, patch(
+            "src.api.ogc_api.services.generate_bim_modells.extract_level_of_geometry",
+            return_value=3,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.transform_file_names_for_lod",
+            side_effect=lambda files, lod, folder: files,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.gml_paths_for_rust",
+            side_effect=lambda files, folder: files,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.CityRustApp"
+        ) as mock_app:
+            mock_fetcher_class.fetch_citymodel_tiles.return_value = sample_city_tiles
+            mock_app.from_gml_files.side_effect = RuntimeError(
+                "no buildings parsed from CityGML"
+            )
+
+            assert_task_failed(
+                execute_generate_city_model_rs,
+                valid_city_request_params.model_dump(),
+                match=NO_BUILDINGS_MESSAGE,
+                exc_type="ValueError",
             )
 
 

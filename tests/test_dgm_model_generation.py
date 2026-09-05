@@ -12,6 +12,10 @@ import pytest
 from fastapi import HTTPException
 
 from src.api.ogc_api.services.generate_bim_modells import execute_generate_dgm_model
+from src.api.ogc_api.utils.user_messages import (
+    TILE_LIMIT_MESSAGE,
+    UNEXPECTED_ERROR_MESSAGE,
+)
 
 # Integration-style tests that exercise the full task in eager mode.
 pytestmark = [pytest.mark.integration, pytest.mark.celery, pytest.mark.dgm]
@@ -116,7 +120,7 @@ class TestDGMModelGeneration:
 
             # Execute task and expect ValueError
             with pytest.raises(
-                ValueError, match="Anzahl der Kacheln überschreitet die Grenze"
+                ValueError, match=TILE_LIMIT_MESSAGE
             ):
                 task = execute_generate_dgm_model.delay(
                     valid_dgm_request_params.model_dump()
@@ -134,7 +138,7 @@ class TestDGMModelGeneration:
             )
 
             # Execute task and expect failure
-            with pytest.raises(Exception, match="Terrain processing error"):
+            with pytest.raises(ValueError, match=UNEXPECTED_ERROR_MESSAGE):
                 task = execute_generate_dgm_model.delay(
                     valid_dgm_request_params.model_dump()
                 )

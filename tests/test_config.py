@@ -8,6 +8,8 @@ for testing the generate_bim_modells.py module.
 from typing import Any, Dict
 from unittest.mock import Mock
 
+from src.api.ogc_api.utils.user_messages import TILE_LIMIT_MESSAGE
+
 # Test data fixtures
 VALID_BBOX_DATA = {"min_x": 9.9756, "min_y": 53.5522, "max_x": 9.9789, "max_y": 53.5536}
 
@@ -134,7 +136,7 @@ TEST_SCENARIOS = {
         "input": VALID_INPUT_DATA,
         "tiles": ["file1.xml", "file2.xml", "file3.xml", "file4.xml", "file5.xml"],
         "expected_exception": "ValueError",
-        "expected_message": "Anzahl der Kacheln überschreitet die Grenze",
+        "expected_message": TILE_LIMIT_MESSAGE,
     },
     "no_file_path": {
         "input": VALID_INPUT_DATA,

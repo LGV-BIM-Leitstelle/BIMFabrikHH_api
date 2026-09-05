@@ -16,6 +16,10 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_tree_model,
     execute_generate_tree_model_rs,
 )
+from src.api.ogc_api.utils.user_messages import (
+    NO_TREES_MESSAGE,
+    UNEXPECTED_ERROR_MESSAGE,
+)
 
 # Integration-style tests that exercise the full task in eager mode.
 pytestmark = [pytest.mark.integration, pytest.mark.celery, pytest.mark.tree]
@@ -123,7 +127,7 @@ class TestTreeModelGeneration:
             ).get()
 
             assert result["model"] is None
-            assert "No trees found" in result["message"]
+            assert result["message"] == NO_TREES_MESSAGE
 
     def test_tree_model_exception_handling(
         self, valid_request_params, assert_task_failed
@@ -139,7 +143,8 @@ class TestTreeModelGeneration:
             assert_task_failed(
                 execute_generate_tree_model,
                 valid_request_params.model_dump(),
-                match="Network error",
+                match=UNEXPECTED_ERROR_MESSAGE,
+                exc_type="ValueError",
             )
 
     def test_tree_model_rs_exception_handling(
@@ -158,8 +163,8 @@ class TestTreeModelGeneration:
             assert_task_failed(
                 execute_generate_tree_model_rs,
                 valid_request_params.model_dump(),
-                match="Rust error",
-                exc_type="Exception",
+                match=UNEXPECTED_ERROR_MESSAGE,
+                exc_type="ValueError",
             )
 
     @pytest.mark.parametrize(
