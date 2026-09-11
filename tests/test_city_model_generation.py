@@ -11,7 +11,16 @@ from unittest.mock import Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from src.api.ogc_api.services.generate_bim_modells import execute_generate_city_model
+from src.api.ogc_api.services.generate_bim_modells import (
+    execute_generate_city_model,
+    execute_generate_city_model_rs,
+)
+from src.api.ogc_api.utils.user_messages import (
+    AREA_LIMIT_MESSAGE,
+    NO_BUILDINGS_MESSAGE,
+    TILE_LIMIT_MESSAGE,
+    UNEXPECTED_ERROR_MESSAGE,
+)
 
 # Integration-style tests that exercise the full task in eager mode.
 pytestmark = [pytest.mark.integration, pytest.mark.celery, pytest.mark.city]
@@ -76,7 +85,7 @@ class TestCityModelGeneration:
             return_value=1,
         ), patch(
             "src.api.ogc_api.services.generate_bim_modells.transform_file_names_for_lod",
-            side_effect=lambda files, lod: files,
+            side_effect=lambda files, lod, folder: files,
         ), patch(
             "src.api.ogc_api.services.generate_bim_modells.CityGenericApp"
         ) as mock_app:
@@ -100,16 +109,8 @@ class TestCityModelGeneration:
     @pytest.mark.parametrize(
         "too_many_tiles",
         [
-            ["file1.xml", "file2.xml", "file3.xml", "file4.xml", "file5.xml"],
-            ["file1.xml"] * 10,  # 10 files
-            [
-                "file1.xml",
-                "file2.xml",
-                "file3.xml",
-                "file4.xml",
-                "file5.xml",
-                "file6.xml",
-            ],  # 6 files
+            [f"file{i}.xml" for i in range(7)],
+            ["file1.xml"] * 10,
         ],
     )
     def test_city_model_too_many_tiles(
@@ -126,9 +127,29 @@ class TestCityModelGeneration:
             assert_task_failed(
                 execute_generate_city_model,
                 valid_city_request_params.model_dump(),
-                match="Anzahl der Kacheln überschreitet die Grenze",
+                match=TILE_LIMIT_MESSAGE,
                 exc_type="ValueError",
             )
+
+    def test_city_model_area_limit(self, valid_city_request_params, assert_task_failed):
+        """A bbox larger than 1 km² is rejected before tiles are fetched."""
+        payload = valid_city_request_params.model_dump()
+        payload["bbox"] = {
+            "min_x": 9.96,
+            "min_y": 53.54,
+            "max_x": 10.00,
+            "max_y": 53.56,
+        }
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class:
+            assert_task_failed(
+                execute_generate_city_model,
+                payload,
+                match=AREA_LIMIT_MESSAGE,
+                exc_type="ValueError",
+            )
+            mock_fetcher_class.fetch_citymodel_tiles.assert_not_called()
 
     def test_city_model_exception_handling(
         self, valid_city_request_params, assert_task_failed
@@ -146,7 +167,60 @@ class TestCityModelGeneration:
             assert_task_failed(
                 execute_generate_city_model,
                 valid_city_request_params.model_dump(),
-                match="Processing error",
+                match=UNEXPECTED_ERROR_MESSAGE,
+                exc_type="ValueError",
+            )
+
+    def test_city_model_rs_exception_handling(
+        self, valid_city_request_params, assert_task_failed
+    ):
+        """Test city model (rs) generation exception handling."""
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class:
+            # Mock dependency to raise exception
+            mock_fetcher_class.fetch_citymodel_tiles.side_effect = Exception(
+                "Rust error"
+            )
+
+            # The exception must propagate so Celery stores a readable failure.
+            # Swallowing it into a FAILURE state without exc_type made
+            # GET /ogc/jobs/{jobId} answer 500 instead of the job status.
+            assert_task_failed(
+                execute_generate_city_model_rs,
+                valid_city_request_params.model_dump(),
+                match=UNEXPECTED_ERROR_MESSAGE,
+                exc_type="ValueError",
+            )
+
+    def test_city_model_rs_no_buildings_ui_message(
+        self, valid_city_request_params, sample_city_tiles, assert_task_failed
+    ):
+        """Rust empty-parse is mapped to the UI no-buildings message."""
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class, patch(
+            "src.api.ogc_api.services.generate_bim_modells.extract_level_of_geometry",
+            return_value=3,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.transform_file_names_for_lod",
+            side_effect=lambda files, lod, folder: files,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.gml_paths_for_rust",
+            side_effect=lambda files, folder: files,
+        ), patch(
+            "src.api.ogc_api.services.generate_bim_modells.CityRustApp"
+        ) as mock_app:
+            mock_fetcher_class.fetch_citymodel_tiles.return_value = sample_city_tiles
+            mock_app.from_gml_files.side_effect = RuntimeError(
+                "no buildings parsed from CityGML"
+            )
+
+            assert_task_failed(
+                execute_generate_city_model_rs,
+                valid_city_request_params.model_dump(),
+                match=NO_BUILDINGS_MESSAGE,
+                exc_type="ValueError",
             )
 
 
@@ -165,7 +239,7 @@ class TestCityModelIntegration:
             return_value=1,
         ), patch(
             "src.api.ogc_api.services.generate_bim_modells.transform_file_names_for_lod",
-            side_effect=lambda files, lod: files,
+            side_effect=lambda files, lod, folder: files,
         ), patch(
             "src.api.ogc_api.services.generate_bim_modells.CityGenericApp"
         ) as mock_app:

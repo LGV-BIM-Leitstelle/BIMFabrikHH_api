@@ -15,25 +15,29 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from BIMFabrikHH_core import (
-    CityGenericApp,
-    RequestParams,
-    TerrainGenericApp,
-    TreesGenericApp,
-)
-from BIMFabrikHH_core.apps.trees import (
-    DEFAULT_OAF_SCHEMA,
+from BIMFabrikHH_core.apps.city.generic.app import CityGenericApp
+from BIMFabrikHH_core.apps.city.generic_rust import CityRustApp
+from BIMFabrikHH_core.apps.terrain.generic.app import TerrainGenericApp
+from BIMFabrikHH_core.apps.terrain.generic_rust import TerrainRustApp
+from BIMFabrikHH_core.apps.trees.generic.app import TreesGenericApp
+from BIMFabrikHH_core.apps.trees.generic_rust import TreesRustApp
+from BIMFabrikHH_core.apps.trees.processing import (
     dataframe_to_records,
     tree_crown_detail_from_containers,
 )
+from BIMFabrikHH_core.apps.trees.column_schema import DEFAULT_OAF_SCHEMA
+from BIMFabrikHH_core.config.paths import local_dir_or_raw
+from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from BIMFabrikHH_core.core.data_processing import DataProcessor
-from BIMFabrikHH_core.core.georeferencing import extract_elevation_df_from_geotiff
+from BIMFabrikHH_core.core.georeferencing import (
+    bbox_request_params_to_epsg25832,
+    extract_elevation_df_from_geotiff,
+)
 from BIMFabrikHH_core.core.ogc_extractor import (
     extract_level_of_geometry,
     extract_psets_basepoint,
 )
-from celery import Celery, states
-from celery.exceptions import Ignore
+from celery import Celery
 from celery.signals import setup_logging as celery_setup_logging
 from celery.signals import task_postrun, task_revoked
 
@@ -41,7 +45,22 @@ from src.api.config.logging_config import setup_logging as configure_logging
 from src.api.config.settings import api_settings
 from src.database import get_celery_config
 
-from ..utils.lod_utils import transform_file_names_for_lod
+from ..utils.lod_utils import (
+    gml_paths_for_rust,
+    lod_folder_url,
+    transform_file_names_for_lod,
+)
+from ..utils.umring_limits import ensure_bbox_area, ensure_tile_count
+from ..utils.user_messages import (
+    LOD3_ONLY_ON_RS_MESSAGE,
+    NO_BUILDINGS_MESSAGE,
+    NO_TERRAIN_MESSAGE,
+    NO_TREE_DATA_MESSAGE,
+    NO_TREES_MESSAGE,
+    TERRAIN_IFC_FAILED_MESSAGE,
+    TREES_IFC_FAILED_MESSAGE,
+    to_user_error,
+)
 from .http_requests import DataFetcher
 
 # Output folder for generated IFC files
@@ -78,6 +97,8 @@ app = Celery(
 # time, so long jobs are load-balanced evenly instead of one child hoarding the
 # backlog. ``task_acks_late=True`` acknowledges a task only after it completes,
 # so an in-flight job survives a worker crash (it is redelivered).
+# ``task_track_started=True`` writes STARTED to the result backend so
+# GET /ogc/jobs/{id} can show OGC ``running`` instead of staying ``accepted``.
 #
 # ``worker_redirect_stdouts=False`` stops Celery from replacing ``sys.stdout``/
 # ``sys.stderr`` with a logging proxy. Logging is configured explicitly via the
@@ -89,6 +110,7 @@ app.conf.update(
     task_routes={f"{__name__}.*": {"queue": PROCESSING_QUEUE}},
     worker_prefetch_multiplier=1,
     task_acks_late=True,
+    task_track_started=True,
     worker_redirect_stdouts=False,
 )
 
@@ -128,6 +150,47 @@ def _on_task_revoked(request: Any = None, **kwargs: Any) -> None:
     _release_admission_slot(task_id)
 
 
+NO_ELEVATION_MESSAGE = (
+    "No terrain data found for the specified bounding box - "
+    "proceeding without elevation data"
+)
+
+
+def bbox_to_dict(request_params: RequestParams) -> Dict[str, float]:
+    """Bounding box in the dict shape DataFetcher expects."""
+    bbox = request_params.bbox
+    return {
+        "min_x": bbox.min_x,
+        "min_y": bbox.min_y,
+        "max_x": bbox.max_x,
+        "max_y": bbox.max_y,
+    }
+
+
+def ifc_result(filename: str) -> Dict[str, Any]:
+    """OGC result payload with the download URLs of a written IFC file."""
+    return {
+        "model": {
+            "filename": filename,
+            "content_type": "application/x-step",
+            "url-http": f"{api_settings.URL_OUTPUT_HTTP}/{filename}",
+            "url-https": f"{api_settings.URL_OUTPUT_HTTPS}/{filename}",
+        }
+    }
+
+
+def empty_result(message: str) -> Dict[str, Any]:
+    """Successful job with no IFC — the umring simply had no features."""
+    return {"message": message, "model": None}
+
+
+def dgm_folder() -> str:
+    """DGM tile directory, as a path this OS can open."""
+    return local_dir_or_raw(
+        f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
+    )
+
+
 @app.task(bind=True)
 def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -148,24 +211,17 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
     logger.info("Input data for tree model generation: %s", input_data)
     try:
         request_params = RequestParams(**input_data)
-        bbox = request_params.bbox
+        ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
-
-        # Convert bbox to dict format for DataFetcher
-        bbox_dict = {
-            "min_x": bbox.min_x,
-            "min_y": bbox.min_y,
-            "max_x": bbox.max_x,
-            "max_y": bbox.max_y,
-        }
+        bbox_dict = bbox_to_dict(request_params)
 
         # Fetch raw tree data using API package
         self.update_state(state="PROGRESS", meta={"percent": 50})
         raw_tree_data = DataFetcher.fetch_tree_data(bbox_dict)
 
         if not raw_tree_data or "features" not in raw_tree_data:
-            raise ValueError("No tree data found in the specified bounding box")
+            raise ValueError(NO_TREE_DATA_MESSAGE)
 
         tree_count = len(raw_tree_data.get("features", []))
         logger.info("Found %s trees in the bounding box", tree_count)
@@ -177,12 +233,9 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         if request_params.use_dgm_elevation:
             tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
             if not tif_filenames:
-                logger.warning(
-                    "No terrain data found for the specified bounding box - proceeding without elevation data"
-                )
+                logger.warning(NO_ELEVATION_MESSAGE)
             else:
-                dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
-                tif_path = f"{dgm_url}/{tif_filenames[0]}"
+                tif_path = f"{dgm_folder()}/{tif_filenames[0]}"
                 logger.info(
                     f"Using GeoTIFF URL for elevation (in-memory processing): {tif_path}"
                 )
@@ -197,9 +250,8 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
         df = DataProcessor.raw_data_to_dataframe(raw_tree_data)
         if df.empty:
-            raise ValueError(
-                "No trees found in the specified bounding box. Please try a different area or check your coordinates."
-            )
+            logger.info(NO_TREES_MESSAGE)
+            return empty_result(NO_TREES_MESSAGE)
 
         schema = DEFAULT_OAF_SCHEMA
         if tif_path:
@@ -222,9 +274,8 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             detail=tree_crown_detail_from_containers(request_params.containers),
         )
         if not records:
-            raise ValueError(
-                "No trees found in the specified bounding box. Please try a different area or check your coordinates."
-            )
+            logger.info(NO_TREES_MESSAGE)
+            return empty_result(NO_TREES_MESSAGE)
 
         basepoint_psets = extract_psets_basepoint(request_params.containers or [])
         TreesGenericApp.build_ifc(
@@ -236,41 +287,91 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
         self.update_state(state="PROGRESS", meta={"percent": 100})
 
-        # File is already saved in the right place - just generate URLs
-        url_http = f"{api_settings.URL_OUTPUT_HTTP}/{filename}"
-        url_https = f"{api_settings.URL_OUTPUT_HTTPS}/{filename}"
-
         logger.info(
             "Tree model generated successfully: %s (task %s)", filename, self.request.id
         )
-        return {
-            "model": {
-                "filename": filename,
-                "content_type": "application/x-step",
-                "url-http": url_http,
-                "url-https": url_https,
-            }
-        }
+        return ifc_result(filename)
 
     except Exception as e:
         logger.exception(
             "Tree model generation failed (task %s): %s", self.request.id, e
         )
-        self.update_state(
-            state=states.FAILURE,
-            meta={
-                "exc_type": type(e).__name__,
-                "exc_message": str(e),
-                "error": f"Error generating tree model: {str(e)}",
-                "troubleshooting": [
-                    "Make sure BIMFabrikHH core package is available",
-                    "Check that all dependencies are installed",
-                    "Verify internet connection for API calls",
-                    "Try a different bounding box area",
-                ],
-            },
+        raise to_user_error(e) from e
+
+
+@app.task(bind=True)
+def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Same fetch/records as generate-tree-model; IFC via TreesRustApp."""
+    self.update_state(state="PROGRESS", meta={"percent": 0})
+    try:
+        request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
+
+        self.update_state(state="PROGRESS", meta={"percent": 25})
+        bbox_dict = bbox_to_dict(request_params)
+
+        self.update_state(state="PROGRESS", meta={"percent": 50})
+        raw_tree_data = DataFetcher.fetch_tree_data(bbox_dict)
+        if not raw_tree_data or "features" not in raw_tree_data:
+            raise ValueError(NO_TREE_DATA_MESSAGE)
+
+        tif_path = None
+        if request_params.use_dgm_elevation:
+            tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
+            if tif_filenames:
+                tif_path = f"{dgm_folder()}/{tif_filenames[0]}"
+            else:
+                logger.warning(NO_ELEVATION_MESSAGE)
+        else:
+            logger.info("Skipping DGM elevation enrichment (use_dgm_elevation=false)")
+
+        filename = (
+            f"Baeume_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
         )
-        raise Ignore()
+        output_path = OUTPUT_FOLDER / filename
+
+        df = DataProcessor.raw_data_to_dataframe(raw_tree_data)
+        if df.empty:
+            logger.info(NO_TREES_MESSAGE)
+            return empty_result(NO_TREES_MESSAGE)
+
+        schema = DEFAULT_OAF_SCHEMA
+        if tif_path:
+            try:
+                df = extract_elevation_df_from_geotiff(
+                    df, tif_path, schema.easting, schema.northing, schema.elevation
+                )
+            except Exception as exc:
+                logger.warning("DGM elevation enrichment failed: %s", exc)
+
+        records = dataframe_to_records(
+            df,
+            aufnahmedatum=datetime.now().strftime("%Y-%m-%d"),
+            schema=schema,
+            source_name="BIMFabrikHH_api",
+            detail=tree_crown_detail_from_containers(request_params.containers),
+        )
+        if not records:
+            logger.info(NO_TREES_MESSAGE)
+            return empty_result(NO_TREES_MESSAGE)
+
+        self.update_state(state="PROGRESS", meta={"percent": 75})
+        bbox_utm = bbox_request_params_to_epsg25832(request_params)
+        basepoint = (bbox_utm[0], bbox_utm[1]) if bbox_utm else None
+        written = TreesRustApp.build_ifc(
+            records, output_path=output_path, basepoint_origin=basepoint
+        )
+        if written is None:
+            raise ValueError(TREES_IFC_FAILED_MESSAGE)
+
+        self.update_state(state="PROGRESS", meta={"percent": 100})
+        return ifc_result(filename)
+
+    except Exception as e:
+        logger.exception(
+            "Tree model generation (rs) failed (task %s): %s", self.request.id, e
+        )
+        raise to_user_error(e) from e
 
 
 @app.task(bind=True)
@@ -286,7 +387,7 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         Dict containing model information including download URLs.
 
     Raises:
-        ValueError: If too many tiles are requested.
+        ValueError: If too many tiles are requested, or LoD3 is requested.
         Exception: If model generation fails.
     """
     self.update_state(state="PROGRESS", meta={"percent": 0})
@@ -294,26 +395,14 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
     logger.info("Starting city model generation (task %s)", self.request.id)
     try:
         request_params = RequestParams(**input_data)
-        bbox = request_params.bbox
+        ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
-
-        # Convert bbox to dict format for DataFetcher
-        bbox_dict = {
-            "min_x": bbox.min_x,
-            "min_y": bbox.min_y,
-            "max_x": bbox.max_x,
-            "max_y": bbox.max_y,
-        }
+        bbox_dict = bbox_to_dict(request_params)
 
         # Fetch tile information using API package
         gml_files = DataFetcher.fetch_citymodel_tiles(bbox_dict)
-
-        if len(gml_files) > 4:
-            raise ValueError(
-                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. "
-                "Bitte wählen Sie einen Umring erneut."
-            )
+        ensure_tile_count(len(gml_files))
 
         # Debug: log ALL containers being sent
         containers = request_params.containers or []
@@ -324,21 +413,20 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         # Extract LoD from container components using existing core method
         lod_level = extract_level_of_geometry(request_params.containers)
         logger.info(f"Extracted LoD level: {lod_level}")
+        if lod_level == 3:
+            raise ValueError(LOD3_ONLY_ON_RS_MESSAGE)
 
-        # Determine LoD folder URL
-        if lod_level == 2:
-            lod_folder = api_settings.DATA_LOD2_FOLDER
-        else:
-            lod_folder = api_settings.DATA_LOD1_FOLDER
-
-        folder_url = f"{api_settings.DATA_BASE_URL}/{lod_folder}"
-        logger.info(f"Using LoD{lod_level} directory: {folder_url}")
+        # Resolve the folder once: the tile extension is picked by probing the
+        # directory, so that probe and the read below must use the same,
+        # OS-openable form. Hamburg ships LoD1 as .xml but LoD2 as .gml.
+        local_folder = local_dir_or_raw(lod_folder_url(lod_level))
+        logger.info(f"Using LoD{lod_level} directory: {local_folder}")
 
         self.update_state(state="PROGRESS", meta={"percent": 50})
 
         # Transform file names if needed
         transformed_gml_files = transform_file_names_for_lod(
-            gml_files, lod_level, folder_url
+            gml_files, lod_level, local_folder
         )
         logger.info(f"Using CityGML tiles: {transformed_gml_files}")
 
@@ -349,60 +437,79 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         ifc_path = CityGenericApp.from_gml_files(
             transformed_gml_files,
             request_params=request_params,
-            folder_path=folder_url,
+            folder_path=local_folder,
             output_path=output_path,
         )
-
         if ifc_path is None:
-            raise ValueError(
-                "No buildings found in the specified bounding box. "
-                "Please try a different area or check your coordinates."
-            )
+            logger.info(NO_BUILDINGS_MESSAGE)
+            return empty_result(NO_BUILDINGS_MESSAGE)
 
         self.update_state(state="PROGRESS", meta={"percent": 75})
-
-        # File is already saved in the right place - just generate URLs
-        url_http = f"{api_settings.URL_OUTPUT_HTTP}/{filename}"
-        url_https = f"{api_settings.URL_OUTPUT_HTTPS}/{filename}"
-
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "percent": 100,
-            },
-        )
+        self.update_state(state="PROGRESS", meta={"percent": 100})
 
         logger.info(
             "City model generated successfully: %s (task %s)", filename, self.request.id
         )
-        return {
-            "model": {
-                "filename": filename,
-                "content_type": "application/x-step",
-                "url-http": url_http,
-                "url-https": url_https,
-            }
-        }
+        return ifc_result(filename)
 
     except Exception as e:
         logger.exception(
             "City model generation failed (task %s): %s", self.request.id, e
         )
-        self.update_state(
-            state=states.FAILURE,
-            meta={
-                "exc_type": type(e).__name__,
-                "exc_message": str(e),
-                "error": f"Error generating city model: {str(e)}",
-                "troubleshooting": [
-                    "Make sure BIMFabrikHH core package is available",
-                    "Check that all dependencies are installed",
-                    "Verify data directory structure",
-                    "Try a smaller bounding box area",
-                ],
-            },
+        raise to_user_error(e) from e
+
+
+@app.task(bind=True)
+def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Same tile fetch as generate-city-model; IFC via CityRustApp (mesh)."""
+    self.update_state(state="PROGRESS", meta={"percent": 0})
+    try:
+        request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
+
+        self.update_state(state="PROGRESS", meta={"percent": 25})
+        bbox_dict = bbox_to_dict(request_params)
+
+        gml_files = DataFetcher.fetch_citymodel_tiles(bbox_dict)
+        ensure_tile_count(len(gml_files))
+
+        lod_level = extract_level_of_geometry(request_params.containers)
+        # Resolve the folder once: the tile extension is picked by probing the
+        # directory, so that probe and the final paths must use the same,
+        # OS-openable form. Hamburg ships LoD1 as .xml but LoD2 as .gml.
+        local_folder = local_dir_or_raw(lod_folder_url(lod_level))
+        logger.info(f"Using LoD{lod_level} directory: {local_folder}")
+
+        self.update_state(state="PROGRESS", meta={"percent": 50})
+        transformed_gml_files = transform_file_names_for_lod(
+            gml_files, lod_level, local_folder
         )
-        raise Ignore()
+        logger.info(f"Using CityGML tiles: {transformed_gml_files}")
+
+        filename = (
+            f"Stadtmodell_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        )
+        output_path = OUTPUT_FOLDER / filename
+
+        gml_paths = gml_paths_for_rust(transformed_gml_files, local_folder)
+        ifc_path = CityRustApp.from_gml_files(
+            gml_paths,
+            request_params=request_params,
+            mode="mesh",
+            output_path=output_path,
+        )
+        if ifc_path is None:
+            logger.info(NO_BUILDINGS_MESSAGE)
+            return empty_result(NO_BUILDINGS_MESSAGE)
+
+        self.update_state(state="PROGRESS", meta={"percent": 100})
+        return ifc_result(filename)
+
+    except Exception as e:
+        logger.exception(
+            "City model generation (rs) failed (task %s): %s", self.request.id, e
+        )
+        raise to_user_error(e) from e
 
 
 @app.task(bind=True)
@@ -420,32 +527,16 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
     try:
         # Extract request parameters
         request_params = RequestParams(**input_data)
-        bbox = request_params.bbox
-
-        # Convert bbox to dict format for DataFetcher
-        bbox_dict = {
-            "min_x": bbox.min_x,
-            "min_y": bbox.min_y,
-            "max_x": bbox.max_x,
-            "max_y": bbox.max_y,
-        }
+        ensure_bbox_area(request_params)
+        bbox_dict = bbox_to_dict(request_params)
 
         # Fetch tile information using API package
         tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
         if not tif_filenames:
-            raise FileNotFoundError(
-                "No terrain data found for the specified bounding box"
-            )
+            logger.info(NO_TERRAIN_MESSAGE)
+            return empty_result(NO_TERRAIN_MESSAGE)
 
-        # Check tile limit
-        if len(tif_filenames) > 4:
-            raise ValueError(
-                "Anzahl der Kacheln überschreitet die Grenze von 4 Kacheln. "
-                "Bitte wählen Sie einen Umring erneut."
-            )
-
-        # DGM URL
-        dgm_url = f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
+        ensure_tile_count(len(tif_filenames))
 
         # Generate output path
         filename = (
@@ -456,30 +547,55 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         ifc_path = TerrainGenericApp.from_geotiffs(
             tif_filenames,
             request_params=request_params,
-            folder_path=dgm_url,
+            folder_path=dgm_folder(),
             output_path=output_path,
         )
-
         if ifc_path is None:
-            raise ValueError("Failed to generate IFC data from terrain")
-
-        # Generate URLs
-        url_http = f"{api_settings.URL_OUTPUT_HTTP}/{filename}"
-        url_https = f"{api_settings.URL_OUTPUT_HTTPS}/{filename}"
+            raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)
 
         logger.info(
             "DGM model generated successfully: %s (task %s)", filename, self.request.id
         )
-        return {
-            "model": {
-                "filename": filename,
-                "content_type": "application/x-step",
-                "url-http": url_http,
-                "url-https": url_https,
-            }
-        }
+        return ifc_result(filename)
 
     except Exception as e:
         # Log the error and re-raise so Celery marks task as failed
         logger.exception("DGM generation failed (task %s): %s", self.request.id, e)
-        raise
+        raise to_user_error(e) from e
+
+
+@app.task(bind=True)
+def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Same GeoTIFF fetch as generate-dgm-model; mesh in Python, IFC via TerrainRustApp."""
+    try:
+        request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
+        bbox_dict = bbox_to_dict(request_params)
+
+        tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
+        if not tif_filenames:
+            logger.info(NO_TERRAIN_MESSAGE)
+            return empty_result(NO_TERRAIN_MESSAGE)
+        ensure_tile_count(len(tif_filenames))
+
+        filename = (
+            f"DGM_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        )
+        output_path = OUTPUT_FOLDER / filename
+
+        ifc_path = TerrainRustApp.from_geotiffs(
+            tif_filenames,
+            request_params=request_params,
+            folder_path=dgm_folder(),
+            output_path=output_path,
+        )
+        if ifc_path is None:
+            raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)
+
+        return ifc_result(filename)
+
+    except Exception as e:
+        logger.exception(
+            "DGM model generation (rs) failed (task %s): %s", self.request.id, e
+        )
+        raise to_user_error(e) from e

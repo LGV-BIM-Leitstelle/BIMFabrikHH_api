@@ -100,6 +100,7 @@ class APISettings(BaseSettings):
     DATA_BASE_URL: str
     DATA_LOD1_FOLDER: str
     DATA_LOD2_FOLDER: str
+    DATA_LOD3_FOLDER: str
     DATA_DGM_FOLDER: str
 
     # Redis configuration (used for admission control: rate limiting and concurrency)
@@ -197,6 +198,7 @@ class APISettings(BaseSettings):
             f"  Data base URL:       {self.DATA_BASE_URL}",
             f"  Data LoD1 folder:    {self.DATA_LOD1_FOLDER}",
             f"  Data LoD2 folder:    {self.DATA_LOD2_FOLDER}",
+            f"  Data LoD3 folder:    {self.DATA_LOD3_FOLDER}",
             f"  Data DGM folder:     {self.DATA_DGM_FOLDER}",
             f"  Backend DB:          {os.getenv('BACKEND_DB', 'sqlite').lower()}",
             f"  Admission control:   {admission_control_enabled()}",

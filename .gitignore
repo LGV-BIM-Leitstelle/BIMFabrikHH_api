@@ -50,6 +50,7 @@ Thumbs.db
 
 
 /deploy/
+/examples/_examples_local/
 /templates/
 logs/
 monitoring/

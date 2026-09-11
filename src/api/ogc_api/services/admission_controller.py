@@ -21,6 +21,7 @@ import redis
 from fastapi import HTTPException
 
 from src.api.config.settings import api_settings
+from src.api.ogc_api.utils.user_messages import too_many_jobs_message
 
 from .concurrency_limit import ConcurrencyLimiter
 
@@ -57,11 +58,7 @@ class AdmissionController:
             )
             raise HTTPException(
                 status_code=429,
-                detail=(
-                    "Maximum number of concurrent jobs "
-                    f"({self._concurrency.max_active_jobs}) reached. "
-                    "Please wait for a running job to finish before submitting a new one."
-                ),
+                detail=too_many_jobs_message(self._concurrency.max_active_jobs),
             )
 
     def register_job(self, identifier: str, task_id: str) -> None:

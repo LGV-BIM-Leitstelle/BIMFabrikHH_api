@@ -6,12 +6,13 @@ including OGC API Processes routes, Data API routes, and static file serving.
 """
 
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from src.api.web_app import create_app
+from src.api.ogc_api.utils.user_messages import JOB_FAILED_FALLBACK_MESSAGE
 
 
 @pytest.fixture(scope="module")
@@ -125,6 +126,9 @@ class TestProcessesEndpoints:
             "generate-tree-model",
             "generate-city-model",
             "generate-dgm-model",
+            "generate-tree-model-rs",
+            "generate-city-model-rs",
+            "generate-dgm-model-rs",
         ]
 
         for process_id in expected_processes:
@@ -149,6 +153,21 @@ class TestProcessesEndpoints:
         data = response.json()
         assert data["id"] == "generate-city-model"
         assert "title" in data
+
+    def test_get_process_description_tree_rs(self, client):
+        response = client.get("/ogc/processes/generate-tree-model-rs")
+        assert response.status_code == 200
+        assert response.json()["id"] == "generate-tree-model-rs"
+
+    def test_get_process_description_city_rs(self, client):
+        response = client.get("/ogc/processes/generate-city-model-rs")
+        assert response.status_code == 200
+        assert response.json()["id"] == "generate-city-model-rs"
+
+    def test_get_process_description_dgm_rs(self, client):
+        response = client.get("/ogc/processes/generate-dgm-model-rs")
+        assert response.status_code == 200
+        assert response.json()["id"] == "generate-dgm-model-rs"
 
     def test_get_process_description_dgm(self, client):
         """Test getting DGM model process description."""
@@ -189,13 +208,13 @@ class TestProcessExecution:
             mock_get_controller.return_value = controller
             yield controller
 
-    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_tree_model")
-    def test_execute_tree_model_process(self, mock_task, client, valid_execution_input):
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_tree_model.delay")
+    def test_execute_tree_model_process(self, mock_delay, client, valid_execution_input):
         """Test executing tree model generation process."""
         # Mock Celery task
         mock_result = Mock()
         mock_result.id = "test-task-123"
-        mock_task.delay.return_value = mock_result
+        mock_delay.return_value = mock_result
 
         response = client.post(
             "/ogc/processes/generate-tree-model/execution", json=valid_execution_input
@@ -205,12 +224,12 @@ class TestProcessExecution:
         assert "Location" in response.headers
         assert "test-task-123" in response.headers["Location"]
 
-    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_city_model")
-    def test_execute_city_model_process(self, mock_task, client, valid_execution_input):
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_city_model.delay")
+    def test_execute_city_model_process(self, mock_delay, client, valid_execution_input):
         """Test executing city model generation process."""
         mock_result = Mock()
         mock_result.id = "test-task-456"
-        mock_task.delay.return_value = mock_result
+        mock_delay.return_value = mock_result
 
         response = client.post(
             "/ogc/processes/generate-city-model/execution", json=valid_execution_input
@@ -219,12 +238,12 @@ class TestProcessExecution:
         assert response.status_code == 201
         assert "Location" in response.headers
 
-    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_dgm_model")
-    def test_execute_dgm_model_process(self, mock_task, client, valid_execution_input):
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_dgm_model.delay")
+    def test_execute_dgm_model_process(self, mock_delay, client, valid_execution_input):
         """Test executing DGM model generation process."""
         mock_result = Mock()
         mock_result.id = "test-task-789"
-        mock_task.delay.return_value = mock_result
+        mock_delay.return_value = mock_result
 
         response = client.post(
             "/ogc/processes/generate-dgm-model/execution", json=valid_execution_input
@@ -232,6 +251,40 @@ class TestProcessExecution:
 
         assert response.status_code == 201
         assert "Location" in response.headers
+
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_tree_model_rs.delay")
+    def test_execute_tree_model_rs_process(self, mock_delay, client, valid_execution_input):
+        mock_result = Mock()
+        mock_result.id = "test-task-rs-123"
+        mock_delay.return_value = mock_result
+        response = client.post(
+            "/ogc/processes/generate-tree-model-rs/execution",
+            json=valid_execution_input,
+        )
+        assert response.status_code == 201
+        assert "test-task-rs-123" in response.headers["Location"]
+
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_city_model_rs.delay")
+    def test_execute_city_model_rs_process(self, mock_delay, client, valid_execution_input):
+        mock_result = Mock()
+        mock_result.id = "test-task-rs-456"
+        mock_delay.return_value = mock_result
+        response = client.post(
+            "/ogc/processes/generate-city-model-rs/execution",
+            json=valid_execution_input,
+        )
+        assert response.status_code == 201
+
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_dgm_model_rs.delay")
+    def test_execute_dgm_model_rs_process(self, mock_delay, client, valid_execution_input):
+        mock_result = Mock()
+        mock_result.id = "test-task-rs-789"
+        mock_delay.return_value = mock_result
+        response = client.post(
+            "/ogc/processes/generate-dgm-model-rs/execution",
+            json=valid_execution_input,
+        )
+        assert response.status_code == 201
 
     def test_execute_nonexistent_process(self, client, valid_execution_input):
         """Test executing non-existent process."""
@@ -298,6 +351,29 @@ class TestJobStatusEndpoints:
         data = response.json()
         assert data["id"] == "test-job-123"
         assert data["status"] == "accepted"
+
+    @patch("src.api.ogc_api.routes.main_ogc.AsyncResult")
+    def test_get_job_status_unreadable_failure_metadata(
+        self, mock_async_result, client
+    ):
+        """Test job status when the stored failure metadata cannot be decoded.
+
+        A FAILURE result stored without ``exc_type`` — as older task versions
+        did — makes Celery raise ValueError on every read. The job still
+        failed, so the endpoint must report that rather than a 500.
+        """
+        unreadable = ValueError("Exception information must include the exception type")
+        mock_result = Mock()
+        type(mock_result).state = PropertyMock(side_effect=unreadable)
+        type(mock_result).info = PropertyMock(side_effect=unreadable)
+        mock_async_result.return_value = mock_result
+
+        response = client.get("/ogc/jobs/test-job-broken")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["status"] == "failed"
+        assert data["message"] == JOB_FAILED_FALLBACK_MESSAGE
 
     @patch("src.api.ogc_api.routes.main_ogc.AsyncResult")
     def test_get_job_status_success(self, mock_async_result, client):
@@ -520,12 +596,12 @@ class TestEndToEndWorkflow:
     """Integration tests for complete workflow."""
 
     @patch("src.api.ogc_api.routes.main_ogc.get_admission_controller")
-    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_tree_model")
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_tree_model.delay")
     @patch("src.api.ogc_api.routes.main_ogc.AsyncResult")
     def test_complete_tree_model_workflow(
         self,
         mock_async_result,
-        mock_task,
+        mock_delay,
         mock_get_controller,
         client,
         valid_execution_input,
@@ -537,7 +613,7 @@ class TestEndToEndWorkflow:
         # Step 1: Submit job
         mock_submit_result = Mock()
         mock_submit_result.id = "workflow-test-123"
-        mock_task.delay.return_value = mock_submit_result
+        mock_delay.return_value = mock_submit_result
 
         submit_response = client.post(
             "/ogc/processes/generate-tree-model/execution", json=valid_execution_input
