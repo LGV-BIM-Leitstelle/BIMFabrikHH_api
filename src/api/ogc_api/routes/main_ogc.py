@@ -11,7 +11,6 @@ BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
 import datetime
 import logging
 
-from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery import states
 from celery.result import AsyncResult
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
@@ -22,7 +21,10 @@ from src.api.config.settings import admission_control_enabled, api_settings
 from src.api.ogc_api.ogc_metadata.dict_conformance import content_conformance
 from src.api.ogc_api.ogc_metadata.dict_landing_page import content_landing_page
 from src.api.ogc_api.ogc_metadata.dict_processes import content_get_processes
-from src.api.ogc_api.ogc_metadata.process_definitions import PROCESS_DEFINITIONS
+from src.api.ogc_api.ogc_metadata.process_definitions import (
+    PROCESS_DEFINITIONS,
+    ProcessInputs,
+)
 from src.api.ogc_api.services.admission_controller import get_admission_controller
 from src.api.ogc_api.services.client_identity import get_client_identifier
 from src.api.ogc_api.services.generate_bim_modells import (
@@ -204,7 +206,7 @@ def execute_process(
     processID: str,
     request: Request,
     background_tasks: BackgroundTasks,
-    inputs: RequestParams = Body(..., embed=True),
+    inputs: ProcessInputs = Body(..., embed=True),
 ) -> JSONResponse:
     """
     Execute a specified OGC process with provided input parameters.

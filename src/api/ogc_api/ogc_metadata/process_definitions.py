@@ -10,8 +10,27 @@ main_ogc.
 from typing import Any, Dict, NamedTuple, Tuple
 
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
+from pydantic import Field
 
 PROCESS_VERSION = "0.1.0"
+
+DGM_TYPE_PLAIN = 1
+DGM_TYPE_PARCELS = 2
+_DGM_PROCESS_IDS = frozenset({"generate-dgm-model", "generate-dgm-model-rs"})
+
+
+class ProcessInputs(RequestParams):
+    """OGC execution body. ``dgm_type`` is used only by the DGM processes."""
+
+    dgm_type: int = Field(
+        default=DGM_TYPE_PLAIN,
+        ge=DGM_TYPE_PLAIN,
+        le=DGM_TYPE_PARCELS,
+        description=(
+            "DGM processes only. 1 = terrain without parcels (default). "
+            "2 = ALKIS Nutzung Bruchkanten; Siedlung/Unland merged into Parcels."
+        ),
+    )
 
 
 class ProcessSpec(NamedTuple):
@@ -37,7 +56,8 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
     ProcessSpec(
         "generate-dgm-model",
         "Generate BIM terrain models as IFC",
-        "Creates BIM terrain models within a given bounding box and exports them as an IFC file",
+        "Creates BIM terrain models within a given bounding box and exports them as an IFC file. "
+        "dgm_type=1 (default) is a single DGM; dgm_type=2 splits by ALKIS Nutzung parcels.",
     ),
     ProcessSpec(
         "generate-tree-model-rs",
@@ -56,7 +76,8 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "generate-dgm-model-rs",
         "Generate BIM terrain models as IFC (Rust)",
         "Creates BIM terrain models within a given bounding box and exports them as an IFC file "
-        "via TerrainRustApp (Python mesh, Rust STEP write).",
+        "via TerrainRustApp (Python mesh, Rust STEP write). "
+        "dgm_type=1 (default) is a single DGM; dgm_type=2 splits by ALKIS Nutzung parcels.",
     ),
 )
 
@@ -80,7 +101,11 @@ def create_ifc_process_definition(
         "title": title,
         "description": description,
         "version": PROCESS_VERSION,
-        "inputs": RequestParams.model_json_schema(),
+        "inputs": (
+            ProcessInputs.model_json_schema()
+            if process_id in _DGM_PROCESS_IDS
+            else RequestParams.model_json_schema()
+        ),
         "outputs": {
             "ifc_file": {
                 "title": "IFC File Links",

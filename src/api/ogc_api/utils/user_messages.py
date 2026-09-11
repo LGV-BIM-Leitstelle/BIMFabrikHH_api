@@ -38,6 +38,9 @@ TERRAIN_IFC_FAILED_MESSAGE = (
     "Das Geländemodell konnte nicht erzeugt werden. "
     "Bitte versuchen Sie es erneut oder wählen Sie einen anderen Umring."
 )
+INVALID_DGM_TYPE_MESSAGE = (
+    "dgm_type muss 1 (Gelände ohne Parzellen) oder 2 (ALKIS-Nutzung / Parzellen) sein."
+)
 INVALID_INPUT_MESSAGE = (
     "Die Eingabedaten sind ungültig. "
     "Bitte prüfen Sie den Umring und die übrigen Angaben."
@@ -85,6 +88,7 @@ _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
         LOD3_ONLY_ON_RS_MESSAGE,
         TREES_IFC_FAILED_MESSAGE,
         TERRAIN_IFC_FAILED_MESSAGE,
+        INVALID_DGM_TYPE_MESSAGE,
         INVALID_INPUT_MESSAGE,
         UNEXPECTED_ERROR_MESSAGE,
     }

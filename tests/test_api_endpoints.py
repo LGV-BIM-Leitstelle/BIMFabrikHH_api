@@ -177,6 +177,8 @@ class TestProcessesEndpoints:
         data = response.json()
         assert data["id"] == "generate-dgm-model"
         assert "title" in data
+        assert "dgm_type" in data["inputs"]["properties"]
+        assert data["inputs"]["properties"]["dgm_type"]["default"] == 1
 
     def test_get_nonexistent_process(self, client):
         """Test getting description for non-existent process."""
@@ -285,6 +287,33 @@ class TestProcessExecution:
             json=valid_execution_input,
         )
         assert response.status_code == 201
+
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_dgm_model.delay")
+    def test_execute_dgm_model_with_dgm_type_parcels(
+        self, mock_delay, client, valid_execution_input
+    ):
+        mock_task = Mock()
+        mock_task.id = "test-job-dgm-type-2"
+        mock_delay.return_value = mock_task
+        body = {
+            "inputs": {**valid_execution_input["inputs"], "dgm_type": 2},
+        }
+        response = client.post(
+            "/ogc/processes/generate-dgm-model/execution", json=body
+        )
+        assert response.status_code == 201
+        assert mock_delay.call_args.args[0]["dgm_type"] == 2
+
+    def test_execute_dgm_model_rejects_invalid_dgm_type(
+        self, client, valid_execution_input
+    ):
+        body = {
+            "inputs": {**valid_execution_input["inputs"], "dgm_type": 3},
+        }
+        response = client.post(
+            "/ogc/processes/generate-dgm-model/execution", json=body
+        )
+        assert response.status_code == 422
 
     def test_execute_nonexistent_process(self, client, valid_execution_input):
         """Test executing non-existent process."""

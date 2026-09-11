@@ -36,6 +36,7 @@ from BIMFabrikHH_core.core.georeferencing import (
 from BIMFabrikHH_core.core.ogc_extractor import (
     extract_level_of_geometry,
     extract_psets_basepoint,
+    ogc_extractor_settings,
 )
 from celery import Celery
 from celery.signals import setup_logging as celery_setup_logging
@@ -43,6 +44,10 @@ from celery.signals import task_postrun, task_revoked
 
 from src.api.config.logging_config import setup_logging as configure_logging
 from src.api.config.settings import api_settings
+from src.api.ogc_api.ogc_metadata.process_definitions import (
+    DGM_TYPE_PARCELS,
+    DGM_TYPE_PLAIN,
+)
 from src.database import get_celery_config
 
 from ..utils.lod_utils import (
@@ -52,6 +57,7 @@ from ..utils.lod_utils import (
 )
 from ..utils.umring_limits import ensure_bbox_area, ensure_tile_count
 from ..utils.user_messages import (
+    INVALID_DGM_TYPE_MESSAGE,
     LOD3_ONLY_ON_RS_MESSAGE,
     NO_BUILDINGS_MESSAGE,
     NO_TERRAIN_MESSAGE,
@@ -189,6 +195,36 @@ def dgm_folder() -> str:
     return local_dir_or_raw(
         f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
     )
+
+
+def dgm_from_geotiffs_kwargs(input_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Kwargs for ``from_geotiffs`` from the request ``dgm_type``.
+
+    ``1`` (default) is a single unconstrained DGM. ``2`` pulls ALKIS Nutzung
+    as Bruchkanten and merges Siedlung/Unland into Parcels. The portal uses
+    the same ``level_of_geometry`` container as Stadtmodell; the API example
+    still sends ``dgm_type`` at the top level.
+    """
+    params = RequestParams(**input_data)
+    has_selector = any(
+        container.containerId == ogc_extractor_settings.LEVEL_OF_GEOMETRY_CONTAINER_ID
+        for container in (params.containers or [])
+    )
+    raw = (
+        extract_level_of_geometry(params.containers)
+        if has_selector
+        else input_data.get("dgm_type", DGM_TYPE_PLAIN)
+    )
+    try:
+        dgm_type = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(INVALID_DGM_TYPE_MESSAGE) from exc
+    logger.info("DGM type %s (guide_from_oaf=%s)", dgm_type, dgm_type == DGM_TYPE_PARCELS)
+    if dgm_type == DGM_TYPE_PARCELS:
+        return {"guide_from_oaf": True, "merge_parcels": True}
+    if dgm_type == DGM_TYPE_PLAIN:
+        return {}
+    raise ValueError(INVALID_DGM_TYPE_MESSAGE)
 
 
 @app.task(bind=True)
@@ -549,6 +585,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
             request_params=request_params,
             folder_path=dgm_folder(),
             output_path=output_path,
+            **dgm_from_geotiffs_kwargs(input_data),
         )
         if ifc_path is None:
             raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)
@@ -588,6 +625,7 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
             request_params=request_params,
             folder_path=dgm_folder(),
             output_path=output_path,
+            **dgm_from_geotiffs_kwargs(input_data),
         )
         if ifc_path is None:
             raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)
