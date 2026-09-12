@@ -5,6 +5,7 @@ This module provides Celery tasks for generating different types of BIM models:
 - Tree models from cadastral data
 - City models from CityGML data
 - Digital terrain models (DGM) from GeoTIFF data
+- Flurstueck (cadastral parcel) models from ALKIS OAF data
 
 Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung
 BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>, Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>
@@ -17,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from BIMFabrikHH_core.apps.city.generic.app import CityGenericApp
 from BIMFabrikHH_core.apps.city.generic_rust import CityRustApp
+from BIMFabrikHH_core.apps.flurstuecke.generic.app import FlurstueckeGenericApp
 from BIMFabrikHH_core.apps.terrain.generic.app import TerrainGenericApp
 from BIMFabrikHH_core.apps.terrain.generic_rust import TerrainRustApp
 from BIMFabrikHH_core.apps.trees.generic.app import TreesGenericApp
@@ -28,6 +30,9 @@ from BIMFabrikHH_core.apps.trees.processing import (
 )
 from BIMFabrikHH_core.apps.trees.column_schema import DEFAULT_OAF_SCHEMA
 from BIMFabrikHH_core.config.paths import local_dir_or_raw
+from BIMFabrikHH_core.data_models.flurstuecke import (
+    records_from_geojson_feature_collection as flurstuecke_records_from_geojson,
+)
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from BIMFabrikHH_core.core.data_processing import DataProcessor
 from BIMFabrikHH_core.core.georeferencing import bbox_request_params_to_epsg25832
@@ -50,8 +55,11 @@ from ..utils.lod_utils import (
 )
 from ..utils.umring_limits import ensure_bbox_area, ensure_tile_count
 from ..utils.user_messages import (
+    FLURSTUECKE_IFC_FAILED_MESSAGE,
     LOD3_ONLY_ON_RS_MESSAGE,
     NO_BUILDINGS_MESSAGE,
+    NO_FLURSTUECK_DATA_MESSAGE,
+    NO_FLURSTUECKE_MESSAGE,
     NO_TERRAIN_MESSAGE,
     NO_TREE_DATA_MESSAGE,
     NO_TREES_MESSAGE,
@@ -59,7 +67,7 @@ from ..utils.user_messages import (
     TREES_IFC_FAILED_MESSAGE,
     to_user_error,
 )
-from .http_requests import DataFetcher
+from .http_requests import DataFetcher, HamburgOGCAPI
 
 # Output folder for generated IFC files
 OUTPUT_FOLDER = Path(api_settings.OUTPUT_FOLDER_PATH)
@@ -583,5 +591,87 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
     except Exception as e:
         logger.exception(
             "DGM model generation (rs) failed (task %s): %s", self.request.id, e
+        )
+        raise to_user_error(e) from e
+
+
+@app.task(bind=True)
+def execute_generate_flurstuecke_model(
+    self, input_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Generate a BIM model of ALKIS Flurstuecke (cadastral parcels) from OAF data.
+
+    Args:
+        self: Celery task instance.
+        input_data: Dictionary containing request parameters including bounding box.
+
+    Returns:
+        Dict containing model information including download URLs.
+
+    Raises:
+        Exception: If model generation fails.
+    """
+    self.update_state(state="PROGRESS", meta={"percent": 0})
+
+    logger.info("Starting Flurstuecke model generation (task %s)", self.request.id)
+    try:
+        request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
+
+        self.update_state(state="PROGRESS", meta={"percent": 25})
+        bbox_dict = bbox_to_dict(request_params)
+
+        self.update_state(state="PROGRESS", meta={"percent": 50})
+        raw_flurstueck_data = HamburgOGCAPI.fetch_all_features(
+            str(api_settings.FLURSTUECKE_API_URL),
+            {
+                "f": "json",
+                "bbox": (
+                    f"{bbox_dict['min_x']},{bbox_dict['min_y']},"
+                    f"{bbox_dict['max_x']},{bbox_dict['max_y']}"
+                ),
+                "crs": HamburgOGCAPI.DEFAULT_CRS,
+                "limit": HamburgOGCAPI.DEFAULT_LIMIT,
+                "skipGeometry": "false",
+            },
+        )
+        if not raw_flurstueck_data or "features" not in raw_flurstueck_data:
+            raise ValueError(NO_FLURSTUECK_DATA_MESSAGE)
+
+        # The fetch asks for EPSG:25832 geometries, which is the CRS the app
+        # extrudes the parcel footprints in.
+        records = flurstuecke_records_from_geojson(
+            raw_flurstueck_data, geometry_crs="EPSG:25832"
+        )
+        if not records:
+            logger.info(NO_FLURSTUECKE_MESSAGE)
+            return empty_result(NO_FLURSTUECKE_MESSAGE)
+        logger.info("Found %s Flurstuecke in the bounding box", len(records))
+
+        self.update_state(state="PROGRESS", meta={"percent": 75})
+        filename = f"Flurstuecke_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        output_path = OUTPUT_FOLDER / filename
+
+        ifc_path = FlurstueckeGenericApp.build_ifc(
+            records,
+            request_params=request_params,
+            output_path=output_path,
+        )
+        if ifc_path is None:
+            raise ValueError(FLURSTUECKE_IFC_FAILED_MESSAGE)
+
+        self.update_state(state="PROGRESS", meta={"percent": 100})
+
+        logger.info(
+            "Flurstuecke model generated successfully: %s (task %s)",
+            filename,
+            self.request.id,
+        )
+        return ifc_result(filename)
+
+    except Exception as e:
+        logger.exception(
+            "Flurstuecke model generation failed (task %s): %s", self.request.id, e
         )
         raise to_user_error(e) from e

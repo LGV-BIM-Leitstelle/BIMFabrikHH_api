@@ -81,6 +81,7 @@ markers = [
     "tree: Tests for tree model generation",
     "city: Tests for city model generation",
     "dgm: Tests for DGM model generation",
+    "flurstueck: Tests for Flurstueck model generation",
     "celery: Tests for Celery task functionality",
     "error: Error handling tests",
     "external_api: Live integration tests against Hamburg OGC API URLs from .env"

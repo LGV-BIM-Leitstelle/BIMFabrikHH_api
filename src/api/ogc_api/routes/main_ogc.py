@@ -2,7 +2,7 @@
 OGC API Processes routes for BIMFabrikHH API.
 
 This module provides OGC API Processes endpoints for executing BIM model generation tasks
-including tree models, city models, and digital terrain models.
+including tree models, city models, digital terrain models and cadastral parcels.
 
 Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung
 BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
@@ -31,6 +31,7 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_city_model_rs,
     execute_generate_dgm_model,
     execute_generate_dgm_model_rs,
+    execute_generate_flurstuecke_model,
     execute_generate_tree_model,
     execute_generate_tree_model_rs,
 )
@@ -54,6 +55,7 @@ PROCESS_TASKS = {
     "generate-tree-model": execute_generate_tree_model,
     "generate-city-model": execute_generate_city_model,
     "generate-dgm-model": execute_generate_dgm_model,
+    "generate-flurstuecke-model": execute_generate_flurstuecke_model,
     "generate-tree-model-rs": execute_generate_tree_model_rs,
     "generate-city-model-rs": execute_generate_city_model_rs,
     "generate-dgm-model-rs": execute_generate_dgm_model_rs,

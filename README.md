@@ -182,6 +182,32 @@ Generates IFC terrain models from digital ground model (DGM) data.
 - Point importance filtering
 - Optimized triangulation
 
+### 4. Flurstueck Models
+
+Generates IFC models of ALKIS cadastral parcels (Flurstücke) from Hamburg's
+simplified ALKIS OGC API Features collection.
+
+**Features:**
+
+- Parcel footprints as `IfcBuildingElementProxy`, extruded 30 m from `z = 0`
+- Paged feature fetching, so a dense umring is not truncated
+- `Pset_Objektinformation` per the BIM.Hamburg Merkmalsgruppe Flurstueck V002
+- Pastel colour per Gemarkung
+
+**Example Request:**
+
+```bash
+POST /ogc/processes/generate-flurstuecke-model/execution
+{
+  "bbox": {
+    "min_x": 9.9756,
+    "min_y": 53.5522,
+    "max_x": 9.9789,
+    "max_y": 53.5536
+  }
+}
+```
+
 ## Deployment
 
 ### Production Deployment with Docker
