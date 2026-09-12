@@ -538,11 +538,15 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         )
         output_path = OUTPUT_FOLDER / filename
 
+        lod_level = extract_level_of_geometry(request_params.containers)
+        logger.info("Extracted DGM type (level_of_geom): %s", lod_level)
+
         ifc_path = TerrainGenericApp.from_geotiffs(
             tif_filenames,
             request_params=request_params,
             folder_path=dgm_folder(),
             output_path=output_path,
+            guide_from_oaf=lod_level == 2,
         )
         if ifc_path is None:
             raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)
@@ -577,11 +581,15 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
         )
         output_path = OUTPUT_FOLDER / filename
 
+        lod_level = extract_level_of_geometry(request_params.containers)
+        logger.info("Extracted DGM type (level_of_geom): %s", lod_level)
+
         ifc_path = TerrainRustApp.from_geotiffs(
             tif_filenames,
             request_params=request_params,
             folder_path=dgm_folder(),
             output_path=output_path,
+            guide_from_oaf=lod_level == 2,
         )
         if ifc_path is None:
             raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)

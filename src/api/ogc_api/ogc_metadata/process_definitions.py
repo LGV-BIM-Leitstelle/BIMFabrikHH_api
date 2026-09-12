@@ -37,7 +37,8 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
     ProcessSpec(
         "generate-dgm-model",
         "Generate BIM terrain models as IFC",
-        "Creates BIM terrain models within a given bounding box and exports them as an IFC file",
+        "Creates BIM terrain models within a given bounding box and exports them as an IFC file. "
+        "level_of_geom=1 (default) is a single DGM; level_of_geom=2 splits by ALKIS Nutzung parcels.",
     ),
     ProcessSpec(
         "generate-flurstuecke-model",
@@ -63,7 +64,8 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "generate-dgm-model-rs",
         "Generate BIM terrain models as IFC (Rust)",
         "Creates BIM terrain models within a given bounding box and exports them as an IFC file "
-        "via TerrainRustApp (Python mesh, Rust STEP write).",
+        "via TerrainRustApp (Python mesh, Rust STEP write). "
+        "level_of_geom=1 (default) is a single DGM; level_of_geom=2 splits by ALKIS Nutzung parcels.",
     ),
 )
 

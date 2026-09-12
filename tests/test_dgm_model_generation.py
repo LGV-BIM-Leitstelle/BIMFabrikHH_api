@@ -11,7 +11,10 @@ from unittest.mock import Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from src.api.ogc_api.services.generate_bim_modells import execute_generate_dgm_model
+from src.api.ogc_api.services.generate_bim_modells import (
+    execute_generate_dgm_model,
+    execute_generate_dgm_model_rs,
+)
 from src.api.ogc_api.utils.user_messages import (
     TILE_LIMIT_MESSAGE,
     UNEXPECTED_ERROR_MESSAGE,
@@ -91,9 +94,57 @@ class TestDGMModelGeneration:
 
             # Verify result structure
             mock_app.from_geotiffs.assert_called_once()
+            assert mock_app.from_geotiffs.call_args.kwargs.get("guide_from_oaf") is False
             assert "model" in result
             assert result["model"]["filename"].startswith("DGM_")
             assert result["model"]["content_type"] == "application/x-step"
+
+    def test_dgm_type_parcels_from_workflow_container(
+        self, valid_dgm_request_params, sample_dgm_tiles
+    ):
+        """Portal DetailSelector uses the same level_of_geometry container as Stadtmodell."""
+        payload = valid_dgm_request_params.model_dump()
+        payload["containers"] = list(payload.get("containers") or []) + [
+            {
+                "containerId": "level_of_geometry",
+                "containerTitle": "Level Of Geometry",
+                "components": {
+                    "level_of_geom": {"title": "Level Of Geometry", "value": 2},
+                },
+            }
+        ]
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class, patch(
+            "src.api.ogc_api.services.generate_bim_modells.TerrainGenericApp"
+        ) as mock_app:
+            mock_fetcher_class.fetch_dgm_tiles.return_value = sample_dgm_tiles
+            mock_app.from_geotiffs.return_value = "/path/to/dgm_model.ifc"
+            execute_generate_dgm_model.delay(payload).get(timeout=10)
+            assert mock_app.from_geotiffs.call_args.kwargs["guide_from_oaf"] is True
+
+    def test_dgm_rs_type_parcels_from_workflow_container(
+        self, valid_dgm_request_params, sample_dgm_tiles
+    ):
+        payload = valid_dgm_request_params.model_dump()
+        payload["containers"] = list(payload.get("containers") or []) + [
+            {
+                "containerId": "level_of_geometry",
+                "containerTitle": "Level Of Geometry",
+                "components": {
+                    "level_of_geom": {"title": "Level Of Geometry", "value": 2},
+                },
+            }
+        ]
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class, patch(
+            "src.api.ogc_api.services.generate_bim_modells.TerrainRustApp"
+        ) as mock_app:
+            mock_fetcher_class.fetch_dgm_tiles.return_value = sample_dgm_tiles
+            mock_app.from_geotiffs.return_value = "/path/to/dgm_model.ifc"
+            execute_generate_dgm_model_rs.delay(payload).get(timeout=10)
+            assert mock_app.from_geotiffs.call_args.kwargs["guide_from_oaf"] is True
 
     @pytest.mark.parametrize(
         "too_many_tiles",
