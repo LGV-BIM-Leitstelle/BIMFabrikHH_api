@@ -7,6 +7,7 @@ comparable. Default is all three kinds (6 jobs per umring).
 
     python examples/example_random_1km.py --seed 1
     python examples/example_random_1km.py --km 2 --count 5 --kind tree
+    python examples/example_random_1km.py --kind tree --no-drape
     python examples/example_random_1km.py --kind city --kind dgm --seed 1
 """
 
@@ -122,31 +123,37 @@ def measure_utm(bbox: dict[str, float]) -> tuple[float, float, float]:
     return width_m / 1000.0, height_m / 1000.0, (width_m * height_m) / 1e6
 
 
-def body_for(bbox: dict[str, float], km: float) -> dict[str, Any]:
-    return {
-        "inputs": {
-            "bbox": bbox,
-            "use_dgm_elevation": False,
-            "containers": [
-                {
-                    "containerTitle": "Level of Geometry",
-                    "containerId": "level_of_geometry",
-                    "components": {
-                        "level_of_geom": {"title": "LoD", "value": 1},
-                    },
+def body_for(
+    bbox: dict[str, float],
+    km: float,
+    *,
+    node: str,
+    drape: bool,
+) -> dict[str, Any]:
+    inputs: dict[str, Any] = {
+        "bbox": bbox,
+        "containers": [
+            {
+                "containerTitle": "Level of Geometry",
+                "containerId": "level_of_geometry",
+                "components": {
+                    "level_of_geom": {"title": "LoD", "value": 1},
                 },
-                {
-                    "containerTitle": "Projektinformationen",
-                    "containerId": "Projektinformationen",
-                    "components": {
-                        "project": {"title": "Projektname", "value": f"Random {km:g}km"},
-                        "site": {"title": "IfcSite", "value": "Hamburg"},
-                        "building": {"title": "IfcBuilding", "value": "Test"},
-                    },
+            },
+            {
+                "containerTitle": "Projektinformationen",
+                "containerId": "Projektinformationen",
+                "components": {
+                    "project": {"title": "Projektname", "value": f"Random {km:g}km"},
+                    "site": {"title": "IfcSite", "value": "Hamburg"},
+                    "building": {"title": "IfcBuilding", "value": "Test"},
                 },
-            ],
-        }
+            },
+        ],
     }
+    if node in KIND_NODES["tree"]:
+        inputs["use_dgm_elevation"] = drape
+    return {"inputs": inputs}
 
 
 def wait_job(
@@ -294,6 +301,7 @@ def run_job(
     area_km2: float,
     timeout: int,
     output_dir: Path,
+    drape: bool,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "umring": umring,
@@ -312,7 +320,7 @@ def run_job(
     try:
         created = session.post(
             f"{base}/ogc/processes/{node}/execution",
-            json=body_for(bbox, km),
+            json=body_for(bbox, km, node=node, drape=drape),
             timeout=30,
         )
     except requests.RequestException as exc:
@@ -360,6 +368,12 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=600, help="seconds to wait per job")
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument(
+        "--drape",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Drape trees onto DGM (tree jobs only; default: on). Ignored for city/dgm.",
+    )
+    parser.add_argument(
         "--output-dir",
         default=str(Path(__file__).resolve().parent.parent / "output"),
         help="API OUTPUT_FOLDER_PATH (for IFC size on disk)",
@@ -376,9 +390,10 @@ def main() -> None:
         nodes.extend(KIND_NODES[kind])
     n_jobs = args.count * len(nodes)
     side_m = args.km * 1000.0
+    extra = f"  drape={args.drape}" if "tree" in kinds else ""
     print(
         f"{args.count} umringe × {args.km:g} km × {len(nodes)} nodes = {n_jobs} jobs  "
-        f"kinds={','.join(kinds)}"
+        f"kinds={','.join(kinds)}{extra}"
     )
 
     base = args.base_url.rstrip("/")
@@ -422,6 +437,7 @@ def main() -> None:
                     area_km2=area_km2,
                     timeout=args.timeout,
                     output_dir=output_dir,
+                    drape=args.drape,
                 )
             )
 
