@@ -13,7 +13,7 @@ BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>, Polichronis Muratidis <
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
 from BIMFabrikHH_core.apps.city.generic.app import CityGenericApp
 from BIMFabrikHH_core.apps.city.generic_rust import CityRustApp
@@ -24,15 +24,13 @@ from BIMFabrikHH_core.apps.trees.generic_rust import TreesRustApp
 from BIMFabrikHH_core.apps.trees.processing import (
     dataframe_to_records,
     tree_crown_detail_from_containers,
+    tree_log_from_containers,
 )
 from BIMFabrikHH_core.apps.trees.column_schema import DEFAULT_OAF_SCHEMA
 from BIMFabrikHH_core.config.paths import local_dir_or_raw
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from BIMFabrikHH_core.core.data_processing import DataProcessor
-from BIMFabrikHH_core.core.georeferencing import (
-    bbox_request_params_to_epsg25832,
-    extract_elevation_df_from_geotiff,
-)
+from BIMFabrikHH_core.core.georeferencing import bbox_request_params_to_epsg25832
 from BIMFabrikHH_core.core.ogc_extractor import (
     extract_level_of_geometry,
     extract_psets_basepoint,
@@ -191,6 +189,25 @@ def dgm_folder() -> str:
     )
 
 
+def tree_dgm_tiles(
+    request_params: RequestParams, bbox_dict: Dict[str, float]
+) -> Tuple[Optional[List[str]], Optional[str]]:
+    """DGM tiles + folder for the tree Z drape, or ``(None, None)``.
+
+    On by default (``RequestParams.use_dgm_elevation``); the umring may still
+    touch no tile. Pass ``use_dgm_elevation=false`` to skip.
+    """
+    if not request_params.use_dgm_elevation:
+        logger.info("Skipping DGM elevation enrichment (use_dgm_elevation=false)")
+        return None, None
+    tif_files = DataFetcher.fetch_dgm_tiles(bbox_dict)
+    if not tif_files:
+        logger.warning(NO_ELEVATION_MESSAGE)
+        return None, None
+    logger.info("Using %d DGM GeoTIFF tile(s) for tree Z", len(tif_files))
+    return tif_files, dgm_folder()
+
+
 @app.task(bind=True)
 def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -229,18 +246,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         # Process data using core package
         self.update_state(state="PROGRESS", meta={"percent": 75})
 
-        tif_path = None
-        if request_params.use_dgm_elevation:
-            tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
-            if not tif_filenames:
-                logger.warning(NO_ELEVATION_MESSAGE)
-            else:
-                tif_path = f"{dgm_folder()}/{tif_filenames[0]}"
-                logger.info(
-                    f"Using GeoTIFF URL for elevation (in-memory processing): {tif_path}"
-                )
-        else:
-            logger.info("Skipping DGM elevation enrichment (use_dgm_elevation=false)")
+        tif_files, folder = tree_dgm_tiles(request_params, bbox_dict)
 
         # Generate output path for API's output folder
         filename = (
@@ -254,24 +260,13 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             return empty_result(NO_TREES_MESSAGE)
 
         schema = DEFAULT_OAF_SCHEMA
-        if tif_path:
-            try:
-                df = extract_elevation_df_from_geotiff(
-                    df,
-                    tif_path,
-                    schema.easting,
-                    schema.northing,
-                    schema.elevation,
-                )
-            except Exception as exc:
-                logger.warning("DGM elevation enrichment failed: %s", exc)
-
         records = dataframe_to_records(
             df,
             aufnahmedatum=datetime.now().strftime("%Y-%m-%d"),
             schema=schema,
             source_name="BIMFabrikHH_api",
             detail=tree_crown_detail_from_containers(request_params.containers),
+            log=tree_log_from_containers(request_params.containers),
         )
         if not records:
             logger.info(NO_TREES_MESSAGE)
@@ -283,6 +278,8 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             output_path=output_path,
             bbox_wgs84=request_params.bbox_as_wgs84_tuple,
             basepoint_psets=basepoint_psets if basepoint_psets else None,
+            tif_files=tif_files,
+            dgm_folder=folder,
         )
 
         self.update_state(state="PROGRESS", meta={"percent": 100})
@@ -315,15 +312,7 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         if not raw_tree_data or "features" not in raw_tree_data:
             raise ValueError(NO_TREE_DATA_MESSAGE)
 
-        tif_path = None
-        if request_params.use_dgm_elevation:
-            tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
-            if tif_filenames:
-                tif_path = f"{dgm_folder()}/{tif_filenames[0]}"
-            else:
-                logger.warning(NO_ELEVATION_MESSAGE)
-        else:
-            logger.info("Skipping DGM elevation enrichment (use_dgm_elevation=false)")
+        tif_files, folder = tree_dgm_tiles(request_params, bbox_dict)
 
         filename = (
             f"Baeume_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
@@ -336,20 +325,13 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
             return empty_result(NO_TREES_MESSAGE)
 
         schema = DEFAULT_OAF_SCHEMA
-        if tif_path:
-            try:
-                df = extract_elevation_df_from_geotiff(
-                    df, tif_path, schema.easting, schema.northing, schema.elevation
-                )
-            except Exception as exc:
-                logger.warning("DGM elevation enrichment failed: %s", exc)
-
         records = dataframe_to_records(
             df,
             aufnahmedatum=datetime.now().strftime("%Y-%m-%d"),
             schema=schema,
             source_name="BIMFabrikHH_api",
             detail=tree_crown_detail_from_containers(request_params.containers),
+            log=tree_log_from_containers(request_params.containers),
         )
         if not records:
             logger.info(NO_TREES_MESSAGE)
@@ -359,7 +341,11 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         bbox_utm = bbox_request_params_to_epsg25832(request_params)
         basepoint = (bbox_utm[0], bbox_utm[1]) if bbox_utm else None
         written = TreesRustApp.build_ifc(
-            records, output_path=output_path, basepoint_origin=basepoint
+            records,
+            output_path=output_path,
+            basepoint_origin=basepoint,
+            tif_files=tif_files,
+            dgm_folder=folder,
         )
         if written is None:
             raise ValueError(TREES_IFC_FAILED_MESSAGE)

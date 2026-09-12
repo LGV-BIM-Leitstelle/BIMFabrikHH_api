@@ -2,6 +2,7 @@
 
     python examples/example_city_lod3.py
     python examples/example_city_lod3.py --base-url http://localhost:8083
+    python examples/example_city_lod3.py --no-drape
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ BBOX = {
 BODY = {
     "inputs": {
         "bbox": BBOX,
-        "use_dgm_elevation": False,
         "containers": [
             {
                 "containerTitle": "Level of Geometry",
@@ -58,6 +58,12 @@ def main() -> None:
     )
     parser.add_argument("--base-url", default="http://localhost:8083")
     parser.add_argument("--timeout", type=int, default=600, help="seconds to wait in total")
+    parser.add_argument(
+        "--drape",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Drape trees onto DGM (tree job only; default: on). Ignored for city/dgm.",
+    )
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
 
@@ -67,8 +73,11 @@ def main() -> None:
     jobs: dict[str, str] = {}
     for process in PROCESSES:
         url = f"{base}/ogc/processes/{process}/execution"
+        payload = {"inputs": dict(BODY["inputs"])}
+        if process == "generate-tree-model-rs":
+            payload["inputs"]["use_dgm_elevation"] = args.drape
         print(f"POST {url}")
-        created = session.post(url, json=BODY, timeout=30)
+        created = session.post(url, json=payload, timeout=30)
         if not created.ok:
             raise SystemExit(f"{process}: {created.status_code} {created.reason}\n{created.text}")
         job = created.json()

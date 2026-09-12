@@ -27,7 +27,7 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "generate-tree-model",
         "Generate BIM tree models as IFC",
         "Creates BIM models of trees within a given bounding box and exports them as an IFC file. "
-        "Set use_dgm_elevation=true to assign ground elevation from DGM GeoTIFF tiles (off by default).",
+        "Trees are draped onto DGM GeoTIFF tiles by default; set use_dgm_elevation=false to keep Z at 0.",
     ),
     ProcessSpec(
         "generate-city-model",
@@ -43,8 +43,8 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "generate-tree-model-rs",
         "Generate BIM tree models as IFC (Rust)",
         "Creates BIM models of trees within a given bounding box and exports them as an IFC file "
-        "via TreesRustApp. Set use_dgm_elevation=true to assign ground elevation from DGM GeoTIFF "
-        "tiles (off by default).",
+        "via TreesRustApp. Trees are draped onto DGM GeoTIFF tiles by default; set "
+        "use_dgm_elevation=false to keep Z at 0.",
     ),
     ProcessSpec(
         "generate-city-model-rs",
