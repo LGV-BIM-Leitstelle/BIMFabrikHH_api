@@ -2,7 +2,8 @@
 OAF (OpenAPI Features) endpoints for BIMFabrikHH API.
 
 This module provides endpoints for accessing OpenAPI Features data
-from Hamburg's geospatial services including trees, city models, and DGM tiles.
+from Hamburg's geospatial services including trees, city models, DGM tiles
+and ALKIS Flurstuecke.
 
 Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung
 BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
@@ -15,7 +16,8 @@ from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
 
-from ..ogc_api.services.http_requests import DataFetcher
+from ..config.settings import api_settings
+from ..ogc_api.services.http_requests import DataFetcher, HamburgOGCAPI
 
 router = APIRouter()
 
@@ -97,6 +99,65 @@ def get_oaf_trees_hafen(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
         LOGGER.error("An error occurred: %s" % e)
         raise HTTPException(
             status_code=500, detail=f"Error fetching harbor tree data: {str(e)}"
+        )
+
+
+@router.get(
+    "/bimfabrikhh-datasets/oaf-flurstuecke",
+    response_class=Response,
+    tags=["ALKIS Flurstuecke Hamburg"],
+    description="Get ALKIS Flurstuecke from OGC API Features Hamburg",
+)
+def get_oaf_flurstuecke(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+    """
+    Count ALKIS Flurstuecke in the umring, plus the Gemarkungen on the first page.
+
+    Geometry is skipped and only one page is fetched: ``numberMatched`` is the
+    full count, and the Gemarkung names come from that page's properties.
+
+    Args:
+        bbox: Bounding box parameters defining the area of interest.
+
+    Returns:
+        JSONResponse: ``count``, sorted unique ``gemarkungen``, and a German
+        ``message`` the UI can show as-is.
+
+    Raises:
+        HTTPException: If there's an error fetching Flurstueck data.
+    """
+    try:
+        page = HamburgOGCAPI.fetch_data(
+            str(api_settings.FLURSTUECKE_API_URL),
+            {
+                "f": "json",
+                "bbox": f"{bbox.min_x},{bbox.min_y},{bbox.max_x},{bbox.max_y}",
+                "limit": HamburgOGCAPI.DEFAULT_LIMIT,
+                "skipGeometry": "true",
+            },
+        )
+        gemarkungen = sorted(
+            {
+                name
+                for feature in page.get("features") or []
+                if (name := (feature.get("properties") or {}).get("gemarkung"))
+            }
+        )
+        count = page.get("numberMatched", len(page.get("features") or []))
+        label = "Flurstück" if count == 1 else "Flurstücke"
+        message = f"{count} {label}"
+        if gemarkungen:
+            message = f"{message} in {', '.join(gemarkungen)}"
+        return JSONResponse(
+            content={
+                "count": count,
+                "gemarkungen": gemarkungen,
+                "message": message,
+            }
+        )
+    except Exception as e:
+        LOGGER.error("An error occurred: %s" % e)
+        raise HTTPException(
+            status_code=500, detail=f"Error fetching Flurstueck data: {str(e)}"
         )
 
 

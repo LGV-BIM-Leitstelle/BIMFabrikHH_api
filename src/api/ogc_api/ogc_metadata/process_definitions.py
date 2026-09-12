@@ -40,6 +40,13 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "Creates BIM terrain models within a given bounding box and exports them as an IFC file",
     ),
     ProcessSpec(
+        "generate-flurstuecke-model",
+        "Generate BIM cadastral parcel models as IFC",
+        "Creates BIM models of ALKIS Flurstücke within a given bounding box and exports them as an "
+        "IFC file. Each parcel footprint becomes an IfcBuildingElementProxy extruded 30 m from z=0, "
+        "coloured per Gemarkung.",
+    ),
+    ProcessSpec(
         "generate-tree-model-rs",
         "Generate BIM tree models as IFC (Rust)",
         "Creates BIM models of trees within a given bounding box and exports them as an IFC file "

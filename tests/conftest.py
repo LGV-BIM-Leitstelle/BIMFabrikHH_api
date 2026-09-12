@@ -212,6 +212,61 @@ def valid_dgm_request_params():
 
 
 @pytest.fixture
+def valid_flurstuecke_request_params():
+    container = Container(
+        containerTitle="Flurstueck Information",
+        containerId="flurstueck_data",
+        components={
+            "description": Component(
+                title="Description", value="Hamburg ALKIS Flurstuecke"
+            ),
+            "type": Component(title="Data Type", value="Cadastral Parcels"),
+        },
+    )
+    return TreeRequestParams(
+        bbox=BoundingBoxParams(
+            min_x=9.9756, min_y=53.5522, max_x=9.9789, max_y=53.5536
+        ),
+        containers=[container],
+    )
+
+
+@pytest.fixture
+def sample_flurstueck_data():
+    """Sample ALKIS Flurstueck feature collection (EPSG:25832 rings)."""
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": 1,
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [565000.0, 5933000.0],
+                            [565020.0, 5933000.0],
+                            [565020.0, 5933020.0],
+                            [565000.0, 5933020.0],
+                            [565000.0, 5933000.0],
+                        ]
+                    ],
+                },
+                "properties": {
+                    "idflurst": "020123456___00001__",
+                    "flstkennz": "020123456000010000__",
+                    "gemarkung": "Altstadt Nord",
+                    "flstnrzae": "1",
+                    "flaeche": 400.0,
+                    "aktualit": "2024-05-17Z",
+                    "lagebeztxt": "Teststraße",
+                },
+            }
+        ],
+    }
+
+
+@pytest.fixture
 def sample_tree_data():
     """Sample tree data for testing."""
     return {

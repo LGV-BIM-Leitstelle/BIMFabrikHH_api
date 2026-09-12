@@ -2,8 +2,9 @@
 Integration tests for external Hamburg OGC API URLs configured in .env.
 
 These tests call the live Hamburg APIs via DataFetcher and the Data API
-endpoints. They verify that TREES_API_URL, TREES_HAFEN_API_URL, and
-DGM_TILES_API_URL are reachable and return valid responses.
+endpoints. They verify that TREES_API_URL, TREES_HAFEN_API_URL,
+DGM_TILES_API_URL and FLURSTUECKE_API_URL are reachable and return valid
+responses.
 
 Requires network access and a configured .env file.
 
@@ -116,6 +117,12 @@ class TestEnvApiUrlConfiguration:
         assert "lgv_kachel_dk5_1km_utm" in url
         assert url.endswith("/items")
 
+    def test_flurstuecke_api_url_configured(self) -> None:
+        url = str(api_settings.FLURSTUECKE_API_URL)
+        assert url.startswith("https://")
+        assert "alkis_vereinfacht" in url
+        assert url.endswith("/items")
+
     def test_wfs_borehole_api_url_configured(self) -> None:
         url = str(api_settings.WFS_BOREHOLE_API_URL)
         assert url.startswith("https://")
@@ -165,6 +172,43 @@ class TestDgmTilesApiUrl:
         assert all(DGM_TILE_PATTERN.match(tile) for tile in tiles)
 
 
+def _flurstueck_items_params(bbox: Dict[str, float]) -> Dict[str, Any]:
+    return {
+        "f": "json",
+        "bbox": f"{bbox['min_x']},{bbox['min_y']},{bbox['max_x']},{bbox['max_y']}",
+        "crs": HamburgOGCAPI.DEFAULT_CRS,
+        "limit": HamburgOGCAPI.DEFAULT_LIMIT,
+        "skipGeometry": "false",
+    }
+
+
+class TestFlurstueckeApiUrl:
+    """Live tests for FLURSTUECKE_API_URL."""
+
+    def test_fetch_flurstueck_data_returns_polygon_features(self) -> None:
+        data = HamburgOGCAPI.fetch_all_features(
+            str(api_settings.FLURSTUECKE_API_URL),
+            _flurstueck_items_params(HAMBURG_TREE_BBOX),
+        )
+        _assert_oaf_feature_collection(data)
+        assert len(data["features"]) > 0
+
+        feature = data["features"][0]
+        assert feature["geometry"]["type"] in {"Polygon", "MultiPolygon"}
+        # Attributes the Flurstueck psets are built from.
+        properties = feature.get("properties", {})
+        assert "idflurst" in properties
+        assert "gemarkung" in properties
+
+    def test_fetch_flurstueck_data_is_not_truncated(self) -> None:
+        """Paging collects every match, not just the first page."""
+        data = HamburgOGCAPI.fetch_all_features(
+            str(api_settings.FLURSTUECKE_API_URL),
+            _flurstueck_items_params(HAMBURG_TREE_BBOX),
+        )
+        assert len(data["features"]) == data["numberMatched"]
+
+
 class TestBoreholeApiUrl:
     """" Live tests for WFS_BOREHOLE_API_URL. """
 
@@ -197,6 +241,19 @@ class TestDataApiOafEndpoints:
         )
         assert response.status_code == 200
         _assert_oaf_feature_collection(response.json())
+
+    def test_oaf_flurstuecke_endpoint(self, live_client: TestClient) -> None:
+        response = live_client.get(
+            "/data/bimfabrikhh-datasets/oaf-flurstuecke",
+            params=HAMBURG_TREE_BBOX,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] > 0
+        assert isinstance(data["gemarkungen"], list)
+        assert data["gemarkungen"]
+        assert str(data["count"]) in data["message"]
+        assert "Flurstücke" in data["message"] or "Flurstück" in data["message"]
 
     def test_oaf_dgm_tiles_endpoint(self, live_client: TestClient) -> None:
         response = live_client.get(

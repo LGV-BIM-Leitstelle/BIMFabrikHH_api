@@ -126,6 +126,7 @@ class TestProcessesEndpoints:
             "generate-tree-model",
             "generate-city-model",
             "generate-dgm-model",
+            "generate-flurstuecke-model",
             "generate-tree-model-rs",
             "generate-city-model-rs",
             "generate-dgm-model-rs",
@@ -176,6 +177,15 @@ class TestProcessesEndpoints:
 
         data = response.json()
         assert data["id"] == "generate-dgm-model"
+        assert "title" in data
+
+    def test_get_process_description_flurstuecke(self, client):
+        """Test getting Flurstuecke model process description."""
+        response = client.get("/ogc/processes/generate-flurstuecke-model")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["id"] == "generate-flurstuecke-model"
         assert "title" in data
 
     def test_get_nonexistent_process(self, client):

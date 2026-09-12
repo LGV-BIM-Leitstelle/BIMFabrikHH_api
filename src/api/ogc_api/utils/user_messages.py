@@ -26,6 +26,14 @@ NO_TERRAIN_MESSAGE = (
     "Im gewählten Umring wurden keine Geländedaten gefunden. "
     "Bitte wählen Sie einen anderen Bereich."
 )
+NO_FLURSTUECK_DATA_MESSAGE = (
+    "Es konnten keine Flurstücksdaten für den gewählten Umring geladen werden. "
+    "Bitte wählen Sie einen anderen Bereich."
+)
+NO_FLURSTUECKE_MESSAGE = (
+    "Im gewählten Umring wurden keine Flurstücke gefunden. "
+    "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
+)
 LOD3_ONLY_ON_RS_MESSAGE = (
     "LoD3 steht in diesem Prozess nicht zur Verfügung. "
     "Bitte wählen Sie LoD1 oder LoD2, oder starten Sie die Erzeugung über das Rust-Stadtmodell."
@@ -36,6 +44,10 @@ TREES_IFC_FAILED_MESSAGE = (
 )
 TERRAIN_IFC_FAILED_MESSAGE = (
     "Das Geländemodell konnte nicht erzeugt werden. "
+    "Bitte versuchen Sie es erneut oder wählen Sie einen anderen Umring."
+)
+FLURSTUECKE_IFC_FAILED_MESSAGE = (
+    "Das Flurstücksmodell konnte nicht erzeugt werden. "
     "Bitte versuchen Sie es erneut oder wählen Sie einen anderen Umring."
 )
 INVALID_INPUT_MESSAGE = (
@@ -82,9 +94,12 @@ _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
         NO_TREES_MESSAGE,
         NO_BUILDINGS_MESSAGE,
         NO_TERRAIN_MESSAGE,
+        NO_FLURSTUECK_DATA_MESSAGE,
+        NO_FLURSTUECKE_MESSAGE,
         LOD3_ONLY_ON_RS_MESSAGE,
         TREES_IFC_FAILED_MESSAGE,
         TERRAIN_IFC_FAILED_MESSAGE,
+        FLURSTUECKE_IFC_FAILED_MESSAGE,
         INVALID_INPUT_MESSAGE,
         UNEXPECTED_ERROR_MESSAGE,
     }
@@ -104,6 +119,8 @@ def to_user_error(exc: BaseException) -> ValueError:
         return ValueError(NO_TREES_MESSAGE)
     if "terrain mesh" in lowered:
         return ValueError(TERRAIN_IFC_FAILED_MESSAGE)
+    if "no flurstueck records" in lowered:
+        return ValueError(NO_FLURSTUECKE_MESSAGE)
     if "lod3 is only available" in lowered:
         return ValueError(LOD3_ONLY_ON_RS_MESSAGE)
     if "validation error" in lowered:

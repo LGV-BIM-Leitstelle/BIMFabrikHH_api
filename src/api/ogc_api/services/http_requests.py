@@ -27,6 +27,9 @@ class HamburgOGCAPI:
     DEFAULT_LIMIT = api_settings.API_DEFAULT_LIMIT
     DEFAULT_CRS = api_settings.API_DEFAULT_CRS
 
+    # Safety stop for next-link paging (see fetch_all_features).
+    MAX_PAGES = 20
+
     @staticmethod
     def fetch_data(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -55,6 +58,53 @@ class HamburgOGCAPI:
         except requests.RequestException as e:
             LOGGER.error(f"Failed to fetch data from {url}: {e}")
             raise
+
+    @staticmethod
+    def fetch_all_features(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Fetch one feature collection, following ``rel="next"`` links.
+
+        ldproxy caps a page at the requested ``limit``, so a collection with
+        more matches than that is split across pages. Trees fit into a single
+        page, but a 1 km² umring can hold thousands of Flurstücke, and a
+        truncated page would silently drop parcels from the model.
+
+        Returns the first page with every following page's features appended.
+        """
+        collection = HamburgOGCAPI.fetch_data(url, params)
+        features: List[Dict[str, Any]] = list(collection.get("features") or [])
+
+        # The next link already carries limit/offset/bbox/crs, so it is
+        # requested as-is. Bounded so a server that keeps handing out a next
+        # link cannot spin forever.
+        page = collection
+        for _ in range(HamburgOGCAPI.MAX_PAGES):
+            next_url = HamburgOGCAPI._next_page_url(page)
+            if next_url is None:
+                break
+            page = HamburgOGCAPI.fetch_data(next_url, {})
+            page_features = page.get("features") or []
+            if not page_features:
+                break
+            features.extend(page_features)
+        else:
+            LOGGER.warning(
+                "Stopped paging %s after %d pages (%d features)",
+                url,
+                HamburgOGCAPI.MAX_PAGES,
+                len(features),
+            )
+
+        collection["features"] = features
+        collection["numberReturned"] = len(features)
+        return collection
+
+    @staticmethod
+    def _next_page_url(collection: Dict[str, Any]) -> Optional[str]:
+        """URL of the ``rel="next"`` link of ``collection``, or ``None``."""
+        for link in collection.get("links") or []:
+            if link.get("rel") == "next" and link.get("href"):
+                return str(link["href"])
+        return None
 
     @staticmethod
     def data_to_dataframe(data: Dict[str, Any]) -> pd.DataFrame:
