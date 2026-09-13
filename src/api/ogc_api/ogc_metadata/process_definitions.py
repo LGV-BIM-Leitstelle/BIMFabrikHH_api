@@ -48,6 +48,14 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "coloured per Gemarkung.",
     ),
     ProcessSpec(
+        "generate-boreholes-model",
+        "Generate BIM borehole models as IFC",
+        "Creates BIM models of Hamburg Baugrundaufschlüsse (BoreholeML 3.0 WFS) within a given "
+        "bounding box and exports them as an IFC file. Each soil layer becomes an "
+        "IfcBuildingElementProxy cylinder stacked from the Ansatzpunkt, coloured per DIN 4023. "
+        "The umring is limited to 0.1 km².",
+    ),
+    ProcessSpec(
         "generate-tree-model-rs",
         "Generate BIM tree models as IFC (Rust)",
         "Creates BIM models of trees within a given bounding box and exports them as an IFC file "

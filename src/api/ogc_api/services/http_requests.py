@@ -377,3 +377,12 @@ class DataFetcher:
 
         url = str(api_settings.WFS_BOREHOLE_API_URL)
         return WFSAPI.fetch_data(url, params)
+
+    @staticmethod
+    def fetch_borehole_header_data(bbox: Dict[str, float]) -> etree._Element:
+        """Fetch borehole stammdaten from the BoreholeML 3.0 Header WFS."""
+        params = {
+            "bbox": f"{bbox['min_x']},{bbox['min_y']},{bbox['max_x']},{bbox['max_y']},EPSG:4326",
+        }
+        url = str(api_settings.WFS_BOREHOLE_HEADER_API_URL)
+        return WFSAPI.fetch_data(url, params)

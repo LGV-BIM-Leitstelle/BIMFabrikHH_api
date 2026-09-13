@@ -208,6 +208,33 @@ POST /ogc/processes/generate-flurstuecke-model/execution
 }
 ```
 
+### 5. Borehole Models
+
+Generates IFC models of Hamburg Baugrundaufschlüsse from the BoreholeML 3.0 WFS.
+
+**Features:**
+
+- One stacked `IfcBuildingElementProxy` cylinder per soil layer
+- Colours from DIN 4023 via the main soil component
+- BIM.Hamburg psets (`Pset_Aufschluss`, `Pset_Aufschlussbereich`, `Pset_Schicht`)
+- Fetch stays in the API; core only parses BoreholeML and writes IFC
+- Umring limited to 0.1 km² (other processes stay at 1 km²)
+- Filter preview uses the Header WFS (`GET /data/bimfabrikhh-datasets/wfs-boreholes`)
+
+**Example Request:**
+
+```bash
+POST /ogc/processes/generate-boreholes-model/execution
+{
+  "bbox": {
+    "min_x": 9.9756,
+    "min_y": 53.5522,
+    "max_x": 9.9789,
+    "max_y": 53.5536
+  }
+}
+```
+
 ## Deployment
 
 ### Production Deployment with Docker

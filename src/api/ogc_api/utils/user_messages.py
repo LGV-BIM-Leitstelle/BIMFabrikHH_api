@@ -10,6 +10,10 @@ AREA_LIMIT_MESSAGE = (
     "Der gewählte Umring ist größer als 1 km². "
     "Bitte zeichnen Sie einen kleineren Umring."
 )
+BOREHOLES_AREA_LIMIT_MESSAGE = (
+    "Der gewählte Umring ist größer als 0,1 km². "
+    "Bitte zeichnen Sie einen kleineren Umring."
+)
 NO_TREE_DATA_MESSAGE = (
     "Es konnten keine Baumdaten für den gewählten Umring geladen werden. "
     "Bitte wählen Sie einen anderen Bereich."
@@ -49,6 +53,23 @@ TERRAIN_IFC_FAILED_MESSAGE = (
 FLURSTUECKE_IFC_FAILED_MESSAGE = (
     "Das Flurstücksmodell konnte nicht erzeugt werden. "
     "Bitte versuchen Sie es erneut oder wählen Sie einen anderen Umring."
+)
+NO_BOREHOLE_DATA_MESSAGE = (
+    "Es konnten keine Bohrungsdaten für den gewählten Umring geladen werden. "
+    "Bitte wählen Sie einen anderen Bereich."
+)
+NO_BOREHOLES_MESSAGE = (
+    "Im gewählten Umring wurden keine Bohrungen gefunden. "
+    "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
+)
+BOREHOLES_IFC_FAILED_MESSAGE = (
+    "Das Bohrungsmodell konnte nicht erzeugt werden. "
+    "Bitte versuchen Sie es erneut oder wählen Sie einen anderen Umring."
+)
+CORE_BOREHOLES_MISSING_MESSAGE = (
+    "Das Bohrungsmodul in bimfabrikhh-core fehlt. "
+    "Bitte Core von einem Stand mit apps.boreholes installieren "
+    "(aktuelles main plus feat/boreholes, nicht den alten Branch allein)."
 )
 INVALID_INPUT_MESSAGE = (
     "Die Eingabedaten sind ungültig. "
@@ -90,6 +111,7 @@ _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
     {
         TILE_LIMIT_MESSAGE,
         AREA_LIMIT_MESSAGE,
+        BOREHOLES_AREA_LIMIT_MESSAGE,
         NO_TREE_DATA_MESSAGE,
         NO_TREES_MESSAGE,
         NO_BUILDINGS_MESSAGE,
@@ -100,6 +122,10 @@ _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
         TREES_IFC_FAILED_MESSAGE,
         TERRAIN_IFC_FAILED_MESSAGE,
         FLURSTUECKE_IFC_FAILED_MESSAGE,
+        NO_BOREHOLE_DATA_MESSAGE,
+        NO_BOREHOLES_MESSAGE,
+        BOREHOLES_IFC_FAILED_MESSAGE,
+        CORE_BOREHOLES_MISSING_MESSAGE,
         INVALID_INPUT_MESSAGE,
         UNEXPECTED_ERROR_MESSAGE,
     }
@@ -121,6 +147,10 @@ def to_user_error(exc: BaseException) -> ValueError:
         return ValueError(TERRAIN_IFC_FAILED_MESSAGE)
     if "no flurstueck records" in lowered:
         return ValueError(NO_FLURSTUECKE_MESSAGE)
+    if "no borehole records" in lowered:
+        return ValueError(NO_BOREHOLES_MESSAGE)
+    if "borehole app is required" in lowered or "apps.boreholes" in lowered:
+        return ValueError(CORE_BOREHOLES_MISSING_MESSAGE)
     if "lod3 is only available" in lowered:
         return ValueError(LOD3_ONLY_ON_RS_MESSAGE)
     if "validation error" in lowered:

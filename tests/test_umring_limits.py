@@ -9,9 +9,14 @@ from src.api.ogc_api.utils.umring_limits import (
     MAX_TILES,
     bbox_area_m2,
     ensure_bbox_area,
+    ensure_borehole_bbox_area,
     ensure_tile_count,
 )
-from src.api.ogc_api.utils.user_messages import AREA_LIMIT_MESSAGE, TILE_LIMIT_MESSAGE
+from src.api.ogc_api.utils.user_messages import (
+    AREA_LIMIT_MESSAGE,
+    BOREHOLES_AREA_LIMIT_MESSAGE,
+    TILE_LIMIT_MESSAGE,
+)
 
 
 def _params(min_x: float, min_y: float, max_x: float, max_y: float) -> RequestParams:
@@ -53,6 +58,24 @@ def test_area_over_rounding_slack_is_rejected(monkeypatch):
     )
     with pytest.raises(ValueError, match=AREA_LIMIT_MESSAGE):
         ensure_bbox_area(_params(9.9664, 53.5594, 9.9800, 53.5675))
+
+
+def test_tenth_km2_square_is_allowed_for_boreholes(monkeypatch):
+    monkeypatch.setattr(
+        "src.api.ogc_api.utils.umring_limits.bbox_request_params_to_epsg25832",
+        lambda _params: (0.0, 0.0, 310.0, 310.0),
+    )
+    ensure_borehole_bbox_area(_params(9.9664, 53.5594, 9.9800, 53.5675))
+
+
+def test_one_km2_square_is_rejected_for_boreholes(monkeypatch):
+    monkeypatch.setattr(
+        "src.api.ogc_api.utils.umring_limits.bbox_request_params_to_epsg25832",
+        lambda _params: (0.0, 0.0, 1000.0, 1000.0),
+    )
+    with pytest.raises(ValueError, match=BOREHOLES_AREA_LIMIT_MESSAGE):
+        ensure_borehole_bbox_area(_params(9.9664, 53.5594, 9.9800, 53.5675))
+    ensure_bbox_area(_params(9.9664, 53.5594, 9.9800, 53.5675))
 
 
 def test_tile_count_at_limit_is_allowed():
