@@ -1,10 +1,10 @@
-"""Same umringe twice: generic vs rust, for tree / city / DGM / Flurstueck.
+"""Same umringe twice: generic vs rust, for tree / city / DGM / Flurstueck / borehole.
 
 Draws ``--count`` random ``--km`` × ``--km`` boxes (same sampling as
 ``bimfabrikhh_core_rs/examples/example_random_2km.py``). Each box is sent
 to both the generic and the ``-rs`` process so times and IFC sizes are
 comparable — except for Flurstuecke, which only has a generic node. Default
-is all kinds (7 jobs per umring).
+is all kinds (8 jobs per umring).
 
     python examples/example_random_1km.py --seed 1
     python examples/example_random_1km.py --km 2 --count 5 --kind tree
@@ -40,6 +40,7 @@ KIND_NODES = {
     "tree": ("generate-tree-model", "generate-tree-model-rs"),
     # Flurstuecke exist as a generic node only, so this kind runs one job.
     "flurstueck": ("generate-flurstuecke-model",),
+    "borehole": ("generate-boreholes-model",),
 }
 
 _TO_UTM = Transformer.from_crs("EPSG:4326", "EPSG:25832", always_xy=True)
@@ -360,7 +361,7 @@ def main() -> None:
         "--kind",
         action="append",
         choices=tuple(KIND_NODES),
-        help="tree, city, dgm and/or flurstueck (repeatable). Default: all.",
+        help="tree, city, dgm, flurstueck and/or borehole (repeatable). Default: all.",
     )
     parser.add_argument(
         "--km",

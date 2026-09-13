@@ -232,6 +232,26 @@ def valid_flurstuecke_request_params():
 
 
 @pytest.fixture
+def valid_boreholes_request_params():
+    container = Container(
+        containerTitle="Borehole Information",
+        containerId="borehole_data",
+        components={
+            "description": Component(
+                title="Description", value="Hamburg Baugrundaufschluesse"
+            ),
+            "type": Component(title="Data Type", value="Boreholes"),
+        },
+    )
+    return TreeRequestParams(
+        bbox=BoundingBoxParams(
+            min_x=9.9756, min_y=53.5522, max_x=9.9789, max_y=53.5536
+        ),
+        containers=[container],
+    )
+
+
+@pytest.fixture
 def sample_flurstueck_data():
     """Sample ALKIS Flurstueck feature collection (EPSG:25832 rings)."""
     return {
@@ -424,6 +444,9 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "tree: Tests for tree model generation")
     config.addinivalue_line("markers", "city: Tests for city model generation")
     config.addinivalue_line("markers", "dgm: Tests for DGM model generation")
+    config.addinivalue_line(
+        "markers", "borehole: Tests for borehole model generation"
+    )
     config.addinivalue_line("markers", "celery: Tests for Celery task functionality")
     config.addinivalue_line("markers", "error: Error handling tests")
     config.addinivalue_line(

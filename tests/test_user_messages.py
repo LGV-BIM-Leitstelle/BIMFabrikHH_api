@@ -4,7 +4,10 @@ import pytest
 
 from src.api.ogc_api.utils.user_messages import (
     AREA_LIMIT_MESSAGE,
+    BOREHOLES_AREA_LIMIT_MESSAGE,
     INVALID_INPUT_MESSAGE,
+    CORE_BOREHOLES_MISSING_MESSAGE,
+    NO_BOREHOLES_MESSAGE,
     NO_BUILDINGS_MESSAGE,
     NO_TREES_MESSAGE,
     TERRAIN_IFC_FAILED_MESSAGE,
@@ -19,10 +22,16 @@ from src.api.ogc_api.utils.user_messages import (
     [
         (ValueError(TILE_LIMIT_MESSAGE), TILE_LIMIT_MESSAGE),
         (ValueError(AREA_LIMIT_MESSAGE), AREA_LIMIT_MESSAGE),
+        (ValueError(BOREHOLES_AREA_LIMIT_MESSAGE), BOREHOLES_AREA_LIMIT_MESSAGE),
         (ValueError(NO_BUILDINGS_MESSAGE), NO_BUILDINGS_MESSAGE),
         (RuntimeError("no buildings parsed from CityGML"), NO_BUILDINGS_MESSAGE),
         (RuntimeError("no trees to write"), NO_TREES_MESSAGE),
         (RuntimeError("terrain mesh has no faces"), TERRAIN_IFC_FAILED_MESSAGE),
+        (RuntimeError("no borehole records"), NO_BOREHOLES_MESSAGE),
+        (
+            ImportError("bimfabrikhh-core borehole app is required"),
+            CORE_BOREHOLES_MISSING_MESSAGE,
+        ),
         (ValueError("1 validation error for RequestParams"), INVALID_INPUT_MESSAGE),
         (Exception("connection reset"), UNEXPECTED_ERROR_MESSAGE),
     ],

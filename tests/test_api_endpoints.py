@@ -127,6 +127,7 @@ class TestProcessesEndpoints:
             "generate-city-model",
             "generate-dgm-model",
             "generate-flurstuecke-model",
+            "generate-boreholes-model",
             "generate-tree-model-rs",
             "generate-city-model-rs",
             "generate-dgm-model-rs",
@@ -186,6 +187,14 @@ class TestProcessesEndpoints:
 
         data = response.json()
         assert data["id"] == "generate-flurstuecke-model"
+
+    def test_get_process_description_boreholes(self, client):
+        """Test getting borehole model process description."""
+        response = client.get("/ogc/processes/generate-boreholes-model")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["id"] == "generate-boreholes-model"
         assert "title" in data
 
     def test_get_nonexistent_process(self, client):
@@ -295,6 +304,20 @@ class TestProcessExecution:
             json=valid_execution_input,
         )
         assert response.status_code == 201
+
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_boreholes_model.delay")
+    def test_execute_boreholes_model_process(
+        self, mock_delay, client, valid_execution_input
+    ):
+        mock_result = Mock()
+        mock_result.id = "test-task-boreholes"
+        mock_delay.return_value = mock_result
+        response = client.post(
+            "/ogc/processes/generate-boreholes-model/execution",
+            json=valid_execution_input,
+        )
+        assert response.status_code == 201
+        assert "test-task-boreholes" in response.headers["Location"]
 
     def test_execute_nonexistent_process(self, client, valid_execution_input):
         """Test executing non-existent process."""

@@ -7,6 +7,9 @@ that stays under 1 km² but crosses many cells.
 
 The area cap is 1.05 km² so a UI that rounds the displayed size up to 1 km²
 does not reject a box that is only slightly over 1.00 km².
+
+Boreholes use a tighter 0.105 km² cap (0.1 km² plus the same 5 % slack):
+a 1 km² WFS GetFeature is ~30 MB / 30 s and hits the server COUNT of 750.
 """
 
 from typing import Optional
@@ -14,9 +17,14 @@ from typing import Optional
 from BIMFabrikHH_core.core.georeferencing import bbox_request_params_to_epsg25832
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 
-from .user_messages import AREA_LIMIT_MESSAGE, TILE_LIMIT_MESSAGE
+from .user_messages import (
+    AREA_LIMIT_MESSAGE,
+    BOREHOLES_AREA_LIMIT_MESSAGE,
+    TILE_LIMIT_MESSAGE,
+)
 
 MAX_BBOX_AREA_M2 = 1_050_000
+MAX_BOREHOLE_BBOX_AREA_M2 = 105_000
 MAX_TILES = 6
 
 
@@ -29,11 +37,25 @@ def bbox_area_m2(request_params: RequestParams) -> Optional[float]:
     return abs(max_x - min_x) * abs(max_y - min_y)
 
 
-def ensure_bbox_area(request_params: RequestParams) -> None:
-    """Raise when the umring is larger than :data:`MAX_BBOX_AREA_M2`."""
+def ensure_bbox_area(
+    request_params: RequestParams,
+    *,
+    max_area_m2: float = MAX_BBOX_AREA_M2,
+    message: str = AREA_LIMIT_MESSAGE,
+) -> None:
+    """Raise when the umring is larger than ``max_area_m2``."""
     area = bbox_area_m2(request_params)
-    if area is not None and area > MAX_BBOX_AREA_M2:
-        raise ValueError(AREA_LIMIT_MESSAGE)
+    if area is not None and area > max_area_m2:
+        raise ValueError(message)
+
+
+def ensure_borehole_bbox_area(request_params: RequestParams) -> None:
+    """Raise when the borehole umring is larger than 0.1 km² (plus slack)."""
+    ensure_bbox_area(
+        request_params,
+        max_area_m2=MAX_BOREHOLE_BBOX_AREA_M2,
+        message=BOREHOLES_AREA_LIMIT_MESSAGE,
+    )
 
 
 def ensure_tile_count(tile_count: int) -> None:

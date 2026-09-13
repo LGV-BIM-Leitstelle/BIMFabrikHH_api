@@ -2,8 +2,8 @@
 OAF (OpenAPI Features) endpoints for BIMFabrikHH API.
 
 This module provides endpoints for accessing OpenAPI Features data
-from Hamburg's geospatial services including trees, city models, DGM tiles
-and ALKIS Flurstuecke.
+from Hamburg's geospatial services including trees, city models, DGM tiles,
+ALKIS Flurstuecke and Baugrundaufschluesse.
 
 Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung
 BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
@@ -16,10 +16,14 @@ from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
 
+from lxml import etree
+
 from ..config.settings import api_settings
 from ..ogc_api.services.http_requests import DataFetcher, HamburgOGCAPI
 
 router = APIRouter()
+
+BMLH_NS = "http://www.infogeo.de/boreholeml/3.0/header"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -159,6 +163,76 @@ def get_oaf_flurstuecke(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
         raise HTTPException(
             status_code=500, detail=f"Error fetching Flurstueck data: {str(e)}"
         )
+
+
+@router.get(
+    "/bimfabrikhh-datasets/wfs-boreholes",
+    response_class=Response,
+    tags=["Baugrundaufschlüsse Hamburg"],
+    description="Count Hamburg Baugrundaufschlüsse from the BoreholeML 3.0 Header WFS",
+)
+def get_wfs_boreholes(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+    """
+    Count boreholes in the umring for the BIMFabrik workflow preview.
+
+    Uses the Header WFS (stammdaten only), like the Flurstücke preview:
+    a German ``message`` the UI can show as-is, without soil layers.
+
+    Args:
+        bbox: Bounding box parameters defining the area of interest.
+
+    Returns:
+        JSONResponse: ``count``, optional ``projekte``, and a German
+        ``message`` such as ``129 Bohrungen wurden gefunden``.
+
+    Raises:
+        HTTPException: If there's an error fetching borehole header data.
+    """
+    try:
+        bbox_dict = {
+            "min_x": bbox.min_x,
+            "min_y": bbox.min_y,
+            "max_x": bbox.max_x,
+            "max_y": bbox.max_y,
+        }
+        xml_root = DataFetcher.fetch_borehole_header_data(bbox_dict)
+        count, projekte = _borehole_header_preview(xml_root)
+        if count == 1:
+            message = "1 Bohrung wurde gefunden"
+        else:
+            message = f"{count} Bohrungen wurden gefunden"
+        return JSONResponse(
+            content={
+                "count": count,
+                "projekte": projekte,
+                "message": message,
+            }
+        )
+    except Exception as e:
+        LOGGER.error("An error occurred: %s" % e)
+        raise HTTPException(
+            status_code=500, detail=f"Error fetching borehole data: {str(e)}"
+        )
+
+
+def _borehole_header_preview(
+    xml_root: etree._Element | None,
+) -> tuple[int, list[str]]:
+    """Count Header features and collect unique project names."""
+    if xml_root is None:
+        return 0, []
+    headers = xml_root.xpath(
+        "//bmlh:BoreholeHeader",
+        namespaces={"bmlh": BMLH_NS},
+    )
+    projekte = sorted(
+        {
+            (project or "").strip()
+            for header in headers
+            if (project := header.findtext(f"{{{BMLH_NS}}}project"))
+        }
+    )
+    return len(headers), projekte
 
 
 @router.get(

@@ -6,6 +6,7 @@ This module provides Celery tasks for generating different types of BIM models:
 - City models from CityGML data
 - Digital terrain models (DGM) from GeoTIFF data
 - Flurstueck (cadastral parcel) models from ALKIS OAF data
+- Borehole (Baugrundaufschluss) models from BoreholeML 3.0 WFS data
 
 Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung
 BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>, Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>
@@ -53,10 +54,18 @@ from ..utils.lod_utils import (
     lod_folder_url,
     transform_file_names_for_lod,
 )
-from ..utils.umring_limits import ensure_bbox_area, ensure_tile_count
+from ..utils.umring_limits import (
+    ensure_bbox_area,
+    ensure_borehole_bbox_area,
+    ensure_tile_count,
+)
 from ..utils.user_messages import (
+    BOREHOLES_IFC_FAILED_MESSAGE,
+    CORE_BOREHOLES_MISSING_MESSAGE,
     FLURSTUECKE_IFC_FAILED_MESSAGE,
     LOD3_ONLY_ON_RS_MESSAGE,
+    NO_BOREHOLE_DATA_MESSAGE,
+    NO_BOREHOLES_MESSAGE,
     NO_BUILDINGS_MESSAGE,
     NO_FLURSTUECK_DATA_MESSAGE,
     NO_FLURSTUECKE_MESSAGE,
@@ -68,6 +77,13 @@ from ..utils.user_messages import (
     to_user_error,
 )
 from .http_requests import DataFetcher, HamburgOGCAPI
+
+try:
+    from BIMFabrikHH_core.apps.boreholes.generic.app import BoreholesGenericApp
+    from BIMFabrikHH_core.apps.boreholes.processing import records_from_boreholeml
+except ImportError:  # core feat/boreholes is not on main yet
+    BoreholesGenericApp = None
+    records_from_boreholeml = None
 
 # Output folder for generated IFC files
 OUTPUT_FOLDER = Path(api_settings.OUTPUT_FOLDER_PATH)
@@ -681,5 +697,78 @@ def execute_generate_flurstuecke_model(
     except Exception as e:
         logger.exception(
             "Flurstuecke model generation failed (task %s): %s", self.request.id, e
+        )
+        raise to_user_error(e) from e
+
+
+@app.task(bind=True)
+def execute_generate_boreholes_model(
+    self, input_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Generate a BIM model of Baugrundaufschluesse from BoreholeML 3.0 WFS data.
+
+    Args:
+        self: Celery task instance.
+        input_data: Dictionary containing request parameters including bounding box.
+
+    Returns:
+        Dict containing model information including download URLs.
+
+    Raises:
+        Exception: If model generation fails.
+    """
+    self.update_state(state="PROGRESS", meta={"percent": 0})
+
+    logger.info("Starting borehole model generation (task %s)", self.request.id)
+    try:
+        request_params = RequestParams(**input_data)
+        ensure_borehole_bbox_area(request_params)
+
+        self.update_state(state="PROGRESS", meta={"percent": 25})
+        bbox_dict = bbox_to_dict(request_params)
+
+        self.update_state(state="PROGRESS", meta={"percent": 50})
+        xml_root = DataFetcher.fetch_borehole_data(bbox_dict)
+        if xml_root is None:
+            raise ValueError(NO_BOREHOLE_DATA_MESSAGE)
+        if records_from_boreholeml is None:
+            raise ImportError(CORE_BOREHOLES_MISSING_MESSAGE)
+
+        records = records_from_boreholeml(xml_root)
+        if not records:
+            logger.info(NO_BOREHOLES_MESSAGE)
+            return empty_result(NO_BOREHOLES_MESSAGE)
+        logger.info("Found %s boreholes in the bounding box", len(records))
+
+        self.update_state(state="PROGRESS", meta={"percent": 75})
+        if BoreholesGenericApp is None:
+            raise ImportError(CORE_BOREHOLES_MISSING_MESSAGE)
+        filename = (
+            f"Baugrundaufschluesse_{datetime.now().strftime('%Y%m%d_%H%M%S')}_"
+            f"{self.request.id}.ifc"
+        )
+        output_path = OUTPUT_FOLDER / filename
+
+        ifc_path = BoreholesGenericApp.build_ifc(
+            records,
+            request_params=request_params,
+            output_path=output_path,
+        )
+        if ifc_path is None:
+            raise ValueError(BOREHOLES_IFC_FAILED_MESSAGE)
+
+        self.update_state(state="PROGRESS", meta={"percent": 100})
+
+        logger.info(
+            "Borehole model generated successfully: %s (task %s)",
+            filename,
+            self.request.id,
+        )
+        return ifc_result(filename)
+
+    except Exception as e:
+        logger.exception(
+            "Borehole model generation failed (task %s): %s", self.request.id, e
         )
         raise to_user_error(e) from e

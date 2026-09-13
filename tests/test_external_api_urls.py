@@ -129,6 +129,12 @@ class TestEnvApiUrlConfiguration:
         assert "HH_WFS_BoreholeML3" in url
         assert url.endswith("&TYPENAMES=bml:Borehole")
 
+    def test_wfs_borehole_header_api_url_configured(self) -> None:
+        url = str(api_settings.WFS_BOREHOLE_HEADER_API_URL)
+        assert url.startswith("https://")
+        assert "HH_WFS_BoreholeML3-Header" in url
+        assert url.endswith("&TYPENAMES=bmlh:BoreholeHeader")
+
 
 class TestTreesApiUrl:
     """Live tests for TREES_API_URL."""
@@ -220,6 +226,10 @@ class TestBoreholeApiUrl:
         data = DataFetcher.fetch_borehole_data(HAMBURG_BOREHOLE_BBOX)
         _assert_wfs_feature_collection(data)
 
+    def test_fetch_borehole_header_url_returns_wfs_feature_collection(self) -> None:
+        data = DataFetcher.fetch_borehole_header_data(HAMBURG_BOREHOLE_BBOX)
+        _assert_wfs_feature_collection(data)
+
 
 class TestDataApiOafEndpoints:
     """Live tests for Data API routes that proxy the same env URLs."""
@@ -254,6 +264,18 @@ class TestDataApiOafEndpoints:
         assert data["gemarkungen"]
         assert str(data["count"]) in data["message"]
         assert "Flurstücke" in data["message"] or "Flurstück" in data["message"]
+
+    def test_wfs_boreholes_endpoint(self, live_client: TestClient) -> None:
+        response = live_client.get(
+            "/data/bimfabrikhh-datasets/wfs-boreholes",
+            params=HAMBURG_BOREHOLE_BBOX,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] > 0
+        assert isinstance(data["projekte"], list)
+        assert str(data["count"]) in data["message"]
+        assert "gefunden" in data["message"]
 
     def test_oaf_dgm_tiles_endpoint(self, live_client: TestClient) -> None:
         response = live_client.get(
