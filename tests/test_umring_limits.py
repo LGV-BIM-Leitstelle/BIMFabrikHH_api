@@ -5,8 +5,10 @@ from BIMFabrikHH_core.data_models.params_tree import RequestParams
 import pytest
 
 from src.api.ogc_api.utils.umring_limits import (
-    MAX_BBOX_AREA_M2,
+    BOREHOLE_MAX_AREA_KM2,
+    DEFAULT_MAX_AREA_KM2,
     MAX_TILES,
+    UMRING_LIMITS_FILE,
     bbox_area_m2,
     ensure_bbox_area,
     ensure_borehole_bbox_area,
@@ -17,6 +19,14 @@ from src.api.ogc_api.utils.user_messages import (
     BOREHOLES_AREA_LIMIT_MESSAGE,
     TILE_LIMIT_MESSAGE,
 )
+
+
+def test_umring_limits_are_loaded_from_repo_json():
+    assert UMRING_LIMITS_FILE.is_file()
+    assert UMRING_LIMITS_FILE.name == "umring_limits.json"
+    assert DEFAULT_MAX_AREA_KM2 == 1.05
+    assert BOREHOLE_MAX_AREA_KM2 == 0.105
+    assert MAX_TILES == 6
 
 
 def _params(min_x: float, min_y: float, max_x: float, max_y: float) -> RequestParams:
@@ -30,7 +40,7 @@ def test_compact_one_km_square_is_allowed():
     params = _params(9.9664, 53.5594, 9.9800, 53.5675)
     area = bbox_area_m2(params)
     assert area is not None
-    assert area <= MAX_BBOX_AREA_M2
+    assert area / 1_000_000 <= DEFAULT_MAX_AREA_KM2
     ensure_bbox_area(params)
 
 
@@ -38,7 +48,7 @@ def test_two_km_square_is_rejected():
     params = _params(9.96, 53.54, 10.00, 53.56)
     area = bbox_area_m2(params)
     assert area is not None
-    assert area > MAX_BBOX_AREA_M2
+    assert area / 1_000_000 > DEFAULT_MAX_AREA_KM2
     with pytest.raises(ValueError, match=AREA_LIMIT_MESSAGE):
         ensure_bbox_area(params)
 

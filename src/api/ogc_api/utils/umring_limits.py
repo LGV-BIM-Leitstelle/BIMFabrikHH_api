@@ -1,21 +1,26 @@
 """Umring size limits enforced before model generation.
 
+Numbers come from ``umring_limits.json`` next to ``.env`` at the API repo
+root (not from the venv). Edit that file and restart the API to change caps.
+
 DK5 / CityGML / DGM cells are 1 km × 1 km. A compact 1 km² window typically
 touches at most four tiles (2 × 2 on a grid corner); six tiles leaves room
 for a slightly elongated 1 km² box. The tile cap still rejects a thin strip
 that stays under 1 km² but crosses many cells.
 
-The area cap is 1.05 km² so a UI that rounds the displayed size up to 1 km²
-does not reject a box that is only slightly over 1.00 km².
-
-Boreholes use a tighter 0.105 km² cap (0.1 km² plus the same 5 % slack):
-a 1 km² WFS GetFeature is ~30 MB / 30 s and hits the server COUNT of 750.
+The hard caps are 1.05 km² and 0.105 km² so a UI that rounds up to
+1 km² or 0.1 km² is not rejected.
 """
 
-from typing import Optional
+from __future__ import annotations
+
+import json
+from typing import Any, Dict, Optional
 
 from BIMFabrikHH_core.core.georeferencing import bbox_request_params_to_epsg25832
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
+
+from src.api.config.settings import PROJECT_ROOT
 
 from .user_messages import (
     AREA_LIMIT_MESSAGE,
@@ -23,9 +28,31 @@ from .user_messages import (
     TILE_LIMIT_MESSAGE,
 )
 
-MAX_BBOX_AREA_M2 = 1_050_000
-MAX_BOREHOLE_BBOX_AREA_M2 = 105_000
-MAX_TILES = 6
+UMRING_LIMITS_FILE = PROJECT_ROOT / "umring_limits.json"
+
+_DEFAULTS: Dict[str, Any] = {
+    "max_area_km2": 1.05,
+    "borehole_max_area_km2": 0.105,
+    "max_tiles": 6,
+}
+
+
+def _load_umring_limits() -> Dict[str, Any]:
+    config = dict(_DEFAULTS)
+    if UMRING_LIMITS_FILE.is_file():
+        with UMRING_LIMITS_FILE.open(encoding="utf-8") as handle:
+            loaded = json.load(handle)
+        if isinstance(loaded, dict):
+            config.update(loaded)
+    return config
+
+
+_LIMITS = _load_umring_limits()
+DEFAULT_MAX_AREA_KM2 = float(_LIMITS["max_area_km2"])
+BOREHOLE_MAX_AREA_KM2 = float(_LIMITS["borehole_max_area_km2"])
+MAX_BBOX_AREA_M2 = round(DEFAULT_MAX_AREA_KM2 * 1_000_000)
+MAX_BOREHOLE_BBOX_AREA_M2 = round(BOREHOLE_MAX_AREA_KM2 * 1_000_000)
+MAX_TILES = int(_LIMITS["max_tiles"])
 
 
 def bbox_area_m2(request_params: RequestParams) -> Optional[float]:
@@ -50,7 +77,7 @@ def ensure_bbox_area(
 
 
 def ensure_borehole_bbox_area(request_params: RequestParams) -> None:
-    """Raise when the borehole umring is larger than 0.1 km² (plus slack)."""
+    """Raise when the borehole umring is larger than the configured cap."""
     ensure_bbox_area(
         request_params,
         max_area_m2=MAX_BOREHOLE_BBOX_AREA_M2,
