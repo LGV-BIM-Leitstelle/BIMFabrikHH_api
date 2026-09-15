@@ -9,10 +9,14 @@ import json
 from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
+from celery.exceptions import TimeLimitExceeded
 from fastapi.testclient import TestClient
 
+from src.api.ogc_api.utils.user_messages import (
+    JOB_FAILED_FALLBACK_MESSAGE,
+    JOB_TIMEOUT_MESSAGE,
+)
 from src.api.web_app import create_app
-from src.api.ogc_api.utils.user_messages import JOB_FAILED_FALLBACK_MESSAGE
 
 
 @pytest.fixture(scope="module")
@@ -228,7 +232,9 @@ class TestProcessExecution:
             yield controller
 
     @patch("src.api.ogc_api.routes.main_ogc.execute_generate_tree_model.delay")
-    def test_execute_tree_model_process(self, mock_delay, client, valid_execution_input):
+    def test_execute_tree_model_process(
+        self, mock_delay, client, valid_execution_input
+    ):
         """Test executing tree model generation process."""
         # Mock Celery task
         mock_result = Mock()
@@ -244,7 +250,9 @@ class TestProcessExecution:
         assert "test-task-123" in response.headers["Location"]
 
     @patch("src.api.ogc_api.routes.main_ogc.execute_generate_city_model.delay")
-    def test_execute_city_model_process(self, mock_delay, client, valid_execution_input):
+    def test_execute_city_model_process(
+        self, mock_delay, client, valid_execution_input
+    ):
         """Test executing city model generation process."""
         mock_result = Mock()
         mock_result.id = "test-task-456"
@@ -272,7 +280,9 @@ class TestProcessExecution:
         assert "Location" in response.headers
 
     @patch("src.api.ogc_api.routes.main_ogc.execute_generate_tree_model_rs.delay")
-    def test_execute_tree_model_rs_process(self, mock_delay, client, valid_execution_input):
+    def test_execute_tree_model_rs_process(
+        self, mock_delay, client, valid_execution_input
+    ):
         mock_result = Mock()
         mock_result.id = "test-task-rs-123"
         mock_delay.return_value = mock_result
@@ -284,7 +294,9 @@ class TestProcessExecution:
         assert "test-task-rs-123" in response.headers["Location"]
 
     @patch("src.api.ogc_api.routes.main_ogc.execute_generate_city_model_rs.delay")
-    def test_execute_city_model_rs_process(self, mock_delay, client, valid_execution_input):
+    def test_execute_city_model_rs_process(
+        self, mock_delay, client, valid_execution_input
+    ):
         mock_result = Mock()
         mock_result.id = "test-task-rs-456"
         mock_delay.return_value = mock_result
@@ -295,7 +307,9 @@ class TestProcessExecution:
         assert response.status_code == 201
 
     @patch("src.api.ogc_api.routes.main_ogc.execute_generate_dgm_model_rs.delay")
-    def test_execute_dgm_model_rs_process(self, mock_delay, client, valid_execution_input):
+    def test_execute_dgm_model_rs_process(
+        self, mock_delay, client, valid_execution_input
+    ):
         mock_result = Mock()
         mock_result.id = "test-task-rs-789"
         mock_delay.return_value = mock_result
@@ -439,6 +453,25 @@ class TestJobStatusEndpoints:
         assert data["status"] == "failed"
 
     @patch("src.api.ogc_api.routes.main_ogc.AsyncResult")
+    def test_get_job_status_hard_timeout(self, mock_async_result, client):
+        """Test job status after a hard Celery time-limit kill.
+
+        A hard time limit SIGKILLs the worker child process, so the result
+        backend stores a raw ``TimeLimitExceeded``.
+        """
+        mock_result = Mock()
+        mock_result.state = "FAILURE"
+        mock_result.info = TimeLimitExceeded(60)
+        mock_async_result.return_value = mock_result
+
+        response = client.get("/ogc/jobs/test-job-timeout")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["status"] == "failed"
+        assert data["message"] == JOB_TIMEOUT_MESSAGE
+
+    @patch("src.api.ogc_api.routes.main_ogc.AsyncResult")
     def test_get_job_results_success(self, mock_async_result, client):
         """Test getting results of successful job."""
         mock_result = Mock()
@@ -485,6 +518,22 @@ class TestJobStatusEndpoints:
         response = client.get("/ogc/jobs/test-job-failed/results")
         # API returns 500 for failed jobs
         assert response.status_code == 500
+
+    @patch("src.api.ogc_api.routes.main_ogc.AsyncResult")
+    def test_get_job_results_hard_timeout(self, mock_async_result, client):
+        """Test job results after a hard Celery time-limit kill.
+
+        Status code stays 500, only the message text changes to the friendly timeout message.
+        """
+        mock_result = Mock()
+        mock_result.state = "FAILURE"
+        mock_result.info = TimeLimitExceeded(60)
+        mock_result.result = None
+        mock_async_result.return_value = mock_result
+
+        response = client.get("/ogc/jobs/test-job-timeout/results")
+        assert response.status_code == 500
+        assert response.json()["detail"] == JOB_TIMEOUT_MESSAGE
 
 
 class TestCORSHeaders:

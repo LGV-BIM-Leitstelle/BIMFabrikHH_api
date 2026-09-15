@@ -6,7 +6,7 @@ limiter, and the admission controller that ties them together. Redis is faked
 with an in-memory double so the tests run without a live Redis instance.
 """
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -198,3 +198,43 @@ class TestAdmissionController:
         controller.release_job("task-1")
         # Now there is capacity again.
         controller.ensure_capacity("client-a")
+
+
+class TestTaskFailureSignalReleasesSlot:
+    """Tests for the ``task_failure`` signal handler that fixes the hard-timeout leak."""
+
+    @patch("src.api.ogc_api.services.admission_controller.get_admission_controller")
+    @patch("src.api.config.settings.admission_control_enabled", return_value=True)
+    def test_on_task_failure_releases_admission_slot(
+        self, mock_enabled, mock_get_controller
+    ):
+        from src.api.ogc_api.services.generate_bim_modells import _on_task_failure
+
+        mock_controller = Mock()
+        mock_get_controller.return_value = mock_controller
+
+        _on_task_failure(task_id="task-timeout-1")
+
+        mock_controller.release_job.assert_called_once_with("task-timeout-1")
+
+    @patch("src.api.ogc_api.services.admission_controller.get_admission_controller")
+    @patch("src.api.config.settings.admission_control_enabled", return_value=False)
+    def test_on_task_failure_noop_when_admission_control_disabled(
+        self, mock_enabled, mock_get_controller
+    ):
+        from src.api.ogc_api.services.generate_bim_modells import _on_task_failure
+
+        _on_task_failure(task_id="task-timeout-2")
+
+        mock_get_controller.assert_not_called()
+
+    @patch("src.api.ogc_api.services.admission_controller.get_admission_controller")
+    @patch("src.api.config.settings.admission_control_enabled", return_value=True)
+    def test_on_task_failure_noop_without_task_id(
+        self, mock_enabled, mock_get_controller
+    ):
+        from src.api.ogc_api.services.generate_bim_modells import _on_task_failure
+
+        _on_task_failure(task_id=None)
+
+        mock_get_controller.assert_not_called()

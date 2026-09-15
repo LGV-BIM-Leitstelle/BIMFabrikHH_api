@@ -136,6 +136,9 @@ class APISettings(BaseSettings):
     # and the metric SRID used only to reason about areas.
     ANALYTICS_BBOX_SRID: int = 4326
     ANALYTICS_AREA_SRID: int = 25832
+    # Celery task hard time limit (seconds). SIGKILLs the worker child process
+    # once exceeded.
+    CELERY_TASK_TIME_LIMIT: int = 60
 
     # Logging configuration
     # Per-handler log levels (console and file handlers can differ).
@@ -213,6 +216,7 @@ class APISettings(BaseSettings):
                 f"({self.RATE_LIMIT_TIMES}/{self.RATE_LIMIT_SECONDS}s)"
             ),
             f"  Max concurrent jobs: {self.MAX_CONCURRENT_JOBS}",
+            f"  Celery task time limit: {self.CELERY_TASK_TIME_LIMIT}s",
             f"  Redis URL:           {self.redis_url}",
             f"  Analytics enabled:   {self.ENABLE_ANALYTICS}",
             (
