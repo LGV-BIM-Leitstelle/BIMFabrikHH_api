@@ -126,6 +126,11 @@ app = Celery(
 # ``sys.stderr`` with a logging proxy. Logging is configured explicitly via the
 # ``setup_logging`` signal, so leaving the redirect on would route stray stdout
 # writes back through the logging system and risk duplicate console lines.
+#
+# ``task_send_sent_event=True`` makes the API process (the Celery *client*)
+# emit a ``task-sent`` event as soon as a job is queued, instead of only once a
+# worker picks it up. Without it, a job stuck behind a busy worker is invisible
+# in monitoring tools such as Flower until it starts running.
 PROCESSING_QUEUE = "processing"
 app.conf.update(
     task_default_queue=PROCESSING_QUEUE,
@@ -135,6 +140,7 @@ app.conf.update(
     task_track_started=True,
     worker_redirect_stdouts=False,
     task_time_limit=api_settings.CELERY_TASK_TIME_LIMIT,
+    task_send_sent_event=True,
 )
 
 
