@@ -87,6 +87,10 @@ NO_MODEL_IN_RESULT_MESSAGE = "Für diesen Auftrag liegt kein Modell vor."
 JOB_NOT_READY_MESSAGE = (
     "Der Auftrag wurde nicht gefunden oder ist noch nicht abgeschlossen."
 )
+JOB_TIMEOUT_MESSAGE = (
+    "Der Auftrag wurde wegen Zeitüberschreitung abgebrochen. "
+    "Bitte versuchen Sie es erneut oder wählen Sie einen kleineren Umring."
+)
 JOB_LISTING_UNAVAILABLE_MESSAGE = (
     "Die Auftragsliste steht mit dem aktuellen System nicht zur Verfügung."
 )
@@ -128,6 +132,7 @@ _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
         CORE_BOREHOLES_MISSING_MESSAGE,
         INVALID_INPUT_MESSAGE,
         UNEXPECTED_ERROR_MESSAGE,
+        JOB_TIMEOUT_MESSAGE,
     }
 )
 

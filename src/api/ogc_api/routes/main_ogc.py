@@ -13,6 +13,7 @@ import logging
 
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery import states
+from celery.exceptions import TimeLimitExceeded
 from celery.result import AsyncResult
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -27,11 +28,11 @@ from src.api.ogc_api.services.admission_controller import get_admission_controll
 from src.api.ogc_api.services.client_identity import get_client_identifier
 from src.api.ogc_api.services.generate_bim_modells import (
     app,
+    execute_generate_boreholes_model,
     execute_generate_city_model,
     execute_generate_city_model_rs,
     execute_generate_dgm_model,
     execute_generate_dgm_model_rs,
-    execute_generate_boreholes_model,
     execute_generate_flurstuecke_model,
     execute_generate_tree_model,
     execute_generate_tree_model_rs,
@@ -43,6 +44,7 @@ from src.api.ogc_api.utils.user_messages import (
     JOB_FAILED_FALLBACK_MESSAGE,
     JOB_LISTING_UNAVAILABLE_MESSAGE,
     JOB_NOT_READY_MESSAGE,
+    JOB_TIMEOUT_MESSAGE,
     NO_MODEL_IN_RESULT_MESSAGE,
     process_not_found_message,
 )
@@ -80,11 +82,19 @@ def _job_state(job: AsyncResult, jobId: str) -> str:
 
 
 def _job_message(job: AsyncResult) -> str:
-    """Failure detail of ``job``, or a fallback when it cannot be decoded."""
+    """Failure detail of ``job``, or a fallback when it cannot be decoded.
+
+    A hard Celery time limit kills the worker child process directly, so the
+    stored failure info is a raw :class:`~celery.exceptions.TimeLimitExceeded`
+    instead of one of our own user-facing messages; map it to a friendly
+    message instead of surfacing the exception repr.
+    """
     try:
         info = job.info
     except ValueError:
         return JOB_FAILED_FALLBACK_MESSAGE
+    if isinstance(info, TimeLimitExceeded):
+        return JOB_TIMEOUT_MESSAGE
     return str(info) if info else JOB_FAILED_FALLBACK_MESSAGE
 
 
