@@ -3,27 +3,40 @@ Redis-backed concurrency limiting for admission control.
 
 This module encapsulates all Redis operations required to enforce a maximum
 number of concurrently active Celery jobs per client identifier. It relies on
-O(1) Redis Set operations (``SADD`` / ``SREM`` / ``SCARD``) rather than scanning
-Celery metadata, and maintains a reverse lookup so that task lifecycle hooks can
-release a slot knowing only the task ID.
+O(log n) Redis Sorted Set operations rather than scanning Celery metadata, and
+maintains a reverse lookup so that task lifecycle hooks can release a slot
+knowing only the task ID.
+
+Slots are normally released by the task lifecycle signals in
+:mod:`generate_bim_modells`. Because those signals cannot fire in every
+scenario (a worker that is OOM-killed, a container that is killed outright, or
+a message removed from the broker before any worker saw it), each slot is
+additionally stamped with its submission time and pruned once it exceeds
+``slot_ttl_seconds``. Pruning happens on read, so no background job is needed
+and a leaked slot always recovers on its own.
 
 Redis structure::
 
-    active_jobs:<identifier>   Redis Set containing active task IDs
-    job_owner:<task_id>        String -> owning client identifier
+    active_jobs_v2:<identifier>   Sorted Set: task ID -> submission timestamp
+    job_owner:<task_id>           String -> owning client identifier (with TTL)
+
+The ``_v2`` suffix exists because this key previously held a plain Set; issuing
+``ZADD`` against a leftover Set raises ``WRONGTYPE``. The new prefix lets old
+and new data coexist so no manual flush is required when deploying.
 
 Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung
 BIM-Leitstelle, Polichronis Muratidis <polichronis.muratidis@gv.hamburg.de>
 """
 
 import logging
+import time
 from typing import Optional
 
 import redis
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_JOBS_KEY_PREFIX = "active_jobs:"
+ACTIVE_JOBS_KEY_PREFIX = "active_jobs_v2:"
 JOB_OWNER_KEY_PREFIX = "job_owner:"
 
 
@@ -34,7 +47,12 @@ class ConcurrencyLimiter:
     with plain identifiers and task IDs.
     """
 
-    def __init__(self, redis_client: redis.Redis, max_active_jobs: int) -> None:
+    def __init__(
+        self,
+        redis_client: redis.Redis,
+        max_active_jobs: int,
+        slot_ttl_seconds: int = 3600,
+    ) -> None:
         """Initialize the concurrency limiter.
 
         Args:
@@ -42,9 +60,13 @@ class ConcurrencyLimiter:
                 is recommended so task IDs are returned as ``str``).
             max_active_jobs: Maximum number of concurrently active jobs allowed
                 per client identifier.
+            slot_ttl_seconds: Age after which a slot is treated as stale and
+                pruned. Must cover queue wait plus run time, since the slot is
+                claimed at submission rather than at task start.
         """
         self._redis = redis_client
         self._max_active_jobs = max_active_jobs
+        self._slot_ttl_seconds = slot_ttl_seconds
 
     @staticmethod
     def _active_jobs_key(identifier: str) -> str:
@@ -59,12 +81,34 @@ class ConcurrencyLimiter:
         """Return the configured maximum number of concurrent jobs."""
         return self._max_active_jobs
 
+    @property
+    def slot_ttl_seconds(self) -> int:
+        """Return the age at which a slot is pruned as stale."""
+        return self._slot_ttl_seconds
+
     def active_job_count(self, identifier: str) -> int:
         """Return the number of currently active jobs for an identifier.
 
-        Uses ``SCARD`` for an O(1) cardinality check.
+        Prunes slots older than the TTL before counting, so a leaked slot never
+        blocks a client permanently.
         """
-        return int(self._redis.scard(self._active_jobs_key(identifier)))
+        key = self._active_jobs_key(identifier)
+        cutoff = time.time() - self._slot_ttl_seconds
+
+        pipe = self._redis.pipeline()
+        pipe.zremrangebyscore(key, "-inf", cutoff)
+        pipe.zcard(key)
+        pruned, count = pipe.execute()
+
+        if pruned:
+            logger.warning(
+                "Pruned %s stale concurrency slot(s) for identifier %s "
+                "(older than %ss)",
+                pruned,
+                identifier,
+                self._slot_ttl_seconds,
+            )
+        return int(count)
 
     def has_capacity(self, identifier: str) -> bool:
         """Return ``True`` if the identifier may start another job."""
@@ -73,12 +117,13 @@ class ConcurrencyLimiter:
     def register_job(self, identifier: str, task_id: str) -> None:
         """Register a submitted task as active for the given identifier.
 
-        Adds the task ID to the identifier's active-jobs set and stores the
-        reverse lookup used during cleanup.
+        Adds the task ID to the identifier's active-jobs sorted set scored by
+        the current time, and stores the reverse lookup used during cleanup.
+        The reverse lookup carries the same TTL so it cannot outlive the slot.
         """
         pipe = self._redis.pipeline()
-        pipe.sadd(self._active_jobs_key(identifier), task_id)
-        pipe.set(self._job_owner_key(task_id), identifier)
+        pipe.zadd(self._active_jobs_key(identifier), {task_id: time.time()})
+        pipe.set(self._job_owner_key(task_id), identifier, ex=self._slot_ttl_seconds)
         pipe.execute()
         logger.debug("Registered job %s for identifier %s", task_id, identifier)
 
@@ -86,8 +131,10 @@ class ConcurrencyLimiter:
         """Release the concurrency slot held by a task.
 
         Looks up the owning identifier via the reverse lookup, removes the task
-        ID from the owner's active-jobs set (``SREM``) and deletes the reverse
-        lookup key. Safe to call multiple times; a missing task is a no-op.
+        ID from the owner's active-jobs sorted set (``ZREM``) and deletes the
+        reverse lookup key. Safe to call multiple times; a missing task is a
+        no-op. A task whose reverse lookup has already expired also returns
+        ``None`` - its slot is pruned by :meth:`active_job_count`.
 
         Args:
             task_id: The Celery task ID whose slot should be released.
@@ -105,7 +152,7 @@ class ConcurrencyLimiter:
             owner = owner.decode("utf-8")
 
         pipe = self._redis.pipeline()
-        pipe.srem(self._active_jobs_key(owner), task_id)
+        pipe.zrem(self._active_jobs_key(owner), task_id)
         pipe.delete(self._job_owner_key(task_id))
         pipe.execute()
         logger.debug("Released job %s for identifier %s", task_id, owner)

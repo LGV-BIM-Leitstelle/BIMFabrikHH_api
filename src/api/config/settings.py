@@ -120,6 +120,18 @@ class APISettings(BaseSettings):
 
     # Admission control - concurrent jobs per client identifier
     MAX_CONCURRENT_JOBS: int = 2
+    # Maximum lifetime (seconds) of a concurrency slot before it is considered
+    # stale and pruned automatically.
+    #
+    # A slot is claimed when the job is *submitted*, not when the worker starts
+    # it, so this window has to cover queue wait time plus the actual run time -
+    # which is why it is far larger than CELERY_TASK_TIME_LIMIT. It is purely a
+    # safety net: slots are normally released by the task_postrun/task_revoked/
+    # task_failure signals. It only takes effect when that release never happens
+    # (worker OOM-killed, container killed, message removed from the broker
+    # without a worker ever seeing it), turning a permanently blocked client
+    # into one that recovers on its own.
+    ADMISSION_SLOT_TTL_SECONDS: int = 3600
 
     # Request analytics (bounding-box KPIs) -> dedicated monitoring PostGIS DB.
     # Opt-in and fully identity-decoupled: only the requested extent is stored,
@@ -216,6 +228,7 @@ class APISettings(BaseSettings):
                 f"({self.RATE_LIMIT_TIMES}/{self.RATE_LIMIT_SECONDS}s)"
             ),
             f"  Max concurrent jobs: {self.MAX_CONCURRENT_JOBS}",
+            f"  Admission slot TTL:  {self.ADMISSION_SLOT_TTL_SECONDS}s",
             f"  Celery task time limit: {self.CELERY_TASK_TIME_LIMIT}s",
             f"  Redis URL:           {self.redis_url}",
             f"  Analytics enabled:   {self.ENABLE_ANALYTICS}",

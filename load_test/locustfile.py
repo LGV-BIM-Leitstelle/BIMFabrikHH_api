@@ -106,7 +106,7 @@ CENTER_MEAN_LAT = 53.550603
 #
 # The default area and the aspect ratio reproduce the original hard-coded box
 # (~218 m x ~156 m => ~0.034 km², width:height ~1.40) at the anchor latitude.
-DEFAULT_BASE_AREA_KM2 = 1  # 0.034
+DEFAULT_BASE_AREA_KM2 = 0.01  # 0.034
 BASE_ASPECT_RATIO = 1.40  # base width (lon) / base height (lat), in meters
 
 # Center: standard deviation of the Gaussian jitter, in meters (isotropic).
