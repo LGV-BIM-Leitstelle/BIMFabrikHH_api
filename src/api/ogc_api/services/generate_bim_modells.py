@@ -79,11 +79,10 @@ from ..utils.user_messages import (
 from .http_requests import DataFetcher, HamburgOGCAPI
 
 try:
-    from BIMFabrikHH_core.apps.boreholes.generic.app import BoreholesGenericApp
-    from BIMFabrikHH_core.apps.boreholes.processing import records_from_boreholeml
+    from BIMFabrikHH_core.apps.boreholes import BoreholeMLProcessor, BoreholesGenericApp
 except ImportError:  # core feat/boreholes is not on main yet
     BoreholesGenericApp = None
-    records_from_boreholeml = None
+    BoreholeMLProcessor = None
 
 # Output folder for generated IFC files
 OUTPUT_FOLDER = Path(api_settings.OUTPUT_FOLDER_PATH)
@@ -748,10 +747,11 @@ def execute_generate_boreholes_model(
         xml_root = DataFetcher.fetch_borehole_data(bbox_dict)
         if xml_root is None:
             raise ValueError(NO_BOREHOLE_DATA_MESSAGE)
-        if records_from_boreholeml is None:
+        if BoreholeMLProcessor is None:
             raise ImportError(CORE_BOREHOLES_MISSING_MESSAGE)
 
-        records = records_from_boreholeml(xml_root)
+        processor = BoreholeMLProcessor()
+        records = processor.parse(xml_root)
         if not records:
             logger.info(NO_BOREHOLES_MESSAGE)
             return empty_result(NO_BOREHOLES_MESSAGE)

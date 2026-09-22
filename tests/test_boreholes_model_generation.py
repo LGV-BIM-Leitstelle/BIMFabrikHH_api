@@ -47,13 +47,13 @@ class TestBoreholesModelGeneration:
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher.fetch_borehole_data"
         ) as mock_fetch, patch(
-            "src.api.ogc_api.services.generate_bim_modells.records_from_boreholeml"
-        ) as mock_parse, patch(
+            "src.api.ogc_api.services.generate_bim_modells.BoreholeMLProcessor"
+        ) as mock_processor, patch(
             "src.api.ogc_api.services.generate_bim_modells.BoreholesGenericApp"
         ) as mock_app:
 
             mock_fetch.return_value = object()
-            mock_parse.return_value = records
+            mock_processor.return_value.parse.return_value = records
             mock_app.build_ifc.return_value = "/path/to/boreholes.ifc"
 
             task = execute_generate_boreholes_model.delay(
@@ -62,8 +62,10 @@ class TestBoreholesModelGeneration:
             result = task.get(timeout=10)
 
             mock_fetch.assert_called_once()
-            mock_parse.assert_called_once()
+            mock_processor.assert_called_once_with()
+            mock_processor.return_value.parse.assert_called_once()
             mock_app.build_ifc.assert_called_once()
+
             assert mock_app.build_ifc.call_args.args[0] == records
             assert result["model"]["filename"].startswith("Baugrundaufschluesse_")
             assert result["model"]["content_type"] == "application/x-step"
@@ -84,10 +86,10 @@ class TestBoreholesModelGeneration:
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher.fetch_borehole_data"
         ) as mock_fetch, patch(
-            "src.api.ogc_api.services.generate_bim_modells.records_from_boreholeml"
-        ) as mock_parse:
+            "src.api.ogc_api.services.generate_bim_modells.BoreholeMLProcessor"
+        ) as mock_processor:
             mock_fetch.return_value = object()
-            mock_parse.return_value = []
+            mock_processor.return_value.parse.return_value = []
 
             task = execute_generate_boreholes_model.delay(
                 valid_boreholes_request_params.model_dump()
@@ -101,13 +103,13 @@ class TestBoreholesModelGeneration:
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.DataFetcher.fetch_borehole_data"
         ) as mock_fetch, patch(
-            "src.api.ogc_api.services.generate_bim_modells.records_from_boreholeml"
-        ) as mock_parse, patch(
+            "src.api.ogc_api.services.generate_bim_modells.BoreholeMLProcessor"
+        ) as mock_processor, patch(
             "src.api.ogc_api.services.generate_bim_modells.BoreholesGenericApp"
         ) as mock_app:
 
             mock_fetch.return_value = object()
-            mock_parse.return_value = _sample_records()
+            mock_processor.return_value.parse.return_value = _sample_records()
             mock_app.build_ifc.return_value = None
 
             with pytest.raises(ValueError, match=BOREHOLES_IFC_FAILED_MESSAGE):
