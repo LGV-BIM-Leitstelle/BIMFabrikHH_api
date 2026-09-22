@@ -78,6 +78,7 @@ def _build_admission_controller() -> AdmissionController:
     concurrency_limiter = ConcurrencyLimiter(
         redis_client=redis_client,
         max_active_jobs=api_settings.MAX_CONCURRENT_JOBS,
+        slot_ttl_seconds=api_settings.ADMISSION_SLOT_TTL_SECONDS,
     )
     return AdmissionController(concurrency_limiter=concurrency_limiter)
 

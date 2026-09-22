@@ -22,6 +22,7 @@ from BIMFabrikHH_core.apps.city.generic_rust import CityRustApp
 from BIMFabrikHH_core.apps.flurstuecke.generic.app import FlurstueckeGenericApp
 from BIMFabrikHH_core.apps.terrain.generic.app import TerrainGenericApp
 from BIMFabrikHH_core.apps.terrain.generic_rust import TerrainRustApp
+from BIMFabrikHH_core.apps.trees.column_schema import DEFAULT_OAF_SCHEMA
 from BIMFabrikHH_core.apps.trees.generic.app import TreesGenericApp
 from BIMFabrikHH_core.apps.trees.generic_rust import TreesRustApp
 from BIMFabrikHH_core.apps.trees.processing import (
@@ -29,21 +30,20 @@ from BIMFabrikHH_core.apps.trees.processing import (
     tree_crown_detail_from_containers,
     tree_log_from_containers,
 )
-from BIMFabrikHH_core.apps.trees.column_schema import DEFAULT_OAF_SCHEMA
 from BIMFabrikHH_core.config.paths import local_dir_or_raw
-from BIMFabrikHH_core.data_models.flurstuecke import (
-    records_from_geojson_feature_collection as flurstuecke_records_from_geojson,
-)
-from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from BIMFabrikHH_core.core.data_processing import DataProcessor
 from BIMFabrikHH_core.core.georeferencing import bbox_request_params_to_epsg25832
 from BIMFabrikHH_core.core.ogc_extractor import (
     extract_level_of_geometry,
     extract_psets_basepoint,
 )
+from BIMFabrikHH_core.data_models.flurstuecke import (
+    records_from_geojson_feature_collection as flurstuecke_records_from_geojson,
+)
+from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery import Celery
 from celery.signals import setup_logging as celery_setup_logging
-from celery.signals import task_postrun, task_revoked
+from celery.signals import task_failure, task_postrun, task_revoked
 
 from src.api.config.logging_config import setup_logging as configure_logging
 from src.api.config.settings import api_settings
@@ -126,6 +126,11 @@ app = Celery(
 # ``sys.stderr`` with a logging proxy. Logging is configured explicitly via the
 # ``setup_logging`` signal, so leaving the redirect on would route stray stdout
 # writes back through the logging system and risk duplicate console lines.
+#
+# ``task_send_sent_event=True`` makes the API process (the Celery *client*)
+# emit a ``task-sent`` event as soon as a job is queued, instead of only once a
+# worker picks it up. Without it, a job stuck behind a busy worker is invisible
+# in monitoring tools such as Flower until it starts running.
 PROCESSING_QUEUE = "processing"
 app.conf.update(
     task_default_queue=PROCESSING_QUEUE,
@@ -134,6 +139,8 @@ app.conf.update(
     task_acks_late=True,
     task_track_started=True,
     worker_redirect_stdouts=False,
+    task_time_limit=api_settings.CELERY_TASK_TIME_LIMIT,
+    task_send_sent_event=True,
 )
 
 
@@ -169,6 +176,19 @@ def _on_task_postrun(task_id: str = None, **kwargs: Any) -> None:
 def _on_task_revoked(request: Any = None, **kwargs: Any) -> None:
     """Release the concurrency slot when a task is revoked/dismissed."""
     task_id = getattr(request, "id", None) if request is not None else None
+    _release_admission_slot(task_id)
+
+
+@task_failure.connect
+def _on_task_failure(task_id: str = None, **kwargs: Any) -> None:
+    """Release the concurrency slot on task failure, including hard timeouts.
+
+    A hard Celery time limit SIGKILLs the worker child process, so the task
+    never returns normally and ``task_postrun`` never fires for it; only
+    ``task_failure`` is emitted (from the parent worker process). Without this
+    handler, a hard-timeout kill would permanently leak the admission-control
+    concurrency slot.
+    """
     _release_admission_slot(task_id)
 
 
@@ -338,9 +358,7 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
 
         tif_files, folder = tree_dgm_tiles(request_params, bbox_dict)
 
-        filename = (
-            f"Baeume_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
-        )
+        filename = f"Baeume_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
         output_path = OUTPUT_FOLDER / filename
 
         df = DataProcessor.raw_data_to_dataframe(raw_tree_data)
@@ -496,9 +514,7 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         )
         logger.info(f"Using CityGML tiles: {transformed_gml_files}")
 
-        filename = (
-            f"Stadtmodell_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
-        )
+        filename = f"Stadtmodell_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
         output_path = OUTPUT_FOLDER / filename
 
         gml_paths = gml_paths_for_rust(transformed_gml_files, local_folder)

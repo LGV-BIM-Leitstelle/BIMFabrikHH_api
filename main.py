@@ -69,6 +69,15 @@ class CeleryWorkerManager:
             worker_pool = os.getenv("CELERY_WORKER_POOL", "prefork")
             worker_concurrency = os.getenv("CELERY_WORKER_CONCURRENCY", "2")
 
+        # Persist the revoked-task set across worker restarts. Without a state
+        # database the set of revoked IDs lives only in worker memory, so with
+        # ``task_acks_late=True`` a revoked-but-still-queued message would be
+        # redelivered and executed after a restart or crash.
+        statedb_path = os.getenv("CELERY_WORKER_STATEDB", "database/worker-state.db")
+        statedb_dir = os.path.dirname(statedb_path)
+        if statedb_dir:
+            os.makedirs(statedb_dir, exist_ok=True)
+
         # Start the worker process directly using celery command
         cmd = [
             sys.executable,
@@ -80,6 +89,7 @@ class CeleryWorkerManager:
             "--loglevel=info",
             f"--concurrency={worker_concurrency}",
             f"--pool={worker_pool}",
+            f"--statedb={statedb_path}",
             # ``-E`` enables sending task-related events (worker_send_task_events)
             # to the broker. The celery-exporter (monitoring stack) consumes these
             # events to expose Prometheus metrics (task runtime, success/failure,
