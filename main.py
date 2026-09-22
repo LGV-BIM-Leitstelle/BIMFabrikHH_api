@@ -69,15 +69,6 @@ class CeleryWorkerManager:
             worker_pool = os.getenv("CELERY_WORKER_POOL", "prefork")
             worker_concurrency = os.getenv("CELERY_WORKER_CONCURRENCY", "2")
 
-        # Persist the revoked-task set across worker restarts. Without a state
-        # database the set of revoked IDs lives only in worker memory, so with
-        # ``task_acks_late=True`` a revoked-but-still-queued message would be
-        # redelivered and executed after a restart or crash.
-        statedb_path = os.getenv("CELERY_WORKER_STATEDB", "database/worker-state.db")
-        statedb_dir = os.path.dirname(statedb_path)
-        if statedb_dir:
-            os.makedirs(statedb_dir, exist_ok=True)
-
         # Start the worker process directly using celery command
         cmd = [
             sys.executable,
@@ -89,15 +80,36 @@ class CeleryWorkerManager:
             "--loglevel=info",
             f"--concurrency={worker_concurrency}",
             f"--pool={worker_pool}",
-            f"--statedb={statedb_path}",
-            # ``-E`` enables sending task-related events (worker_send_task_events)
-            # to the broker. The celery-exporter (monitoring stack) consumes these
-            # events to expose Prometheus metrics (task runtime, success/failure,
-            # active tasks, etc.). Without it the exporter sees no task activity.
-            "-E",
             "-Q",
             "processing",
         ]
+
+        # The following two options only make sense for the production stack
+        # (Redis broker); the sqlite backend is the local "just run it" mode.
+        if os.getenv("BACKEND_DB", "sqlite") == "redis":
+            # Persist the revoked-task set across worker restarts. Without a
+            # state database the set of revoked IDs lives only in worker memory,
+            # so with ``task_acks_late=True`` a revoked-but-still-queued message
+            # would be redelivered and executed after a restart or crash.
+            # Skipped for sqlite because the shelve/dbm file is tied to the
+            # interpreter that created it (a container-written gdbm file cannot
+            # be reopened by a host Python built without _gdbm).
+            statedb_path = os.getenv(
+                "CELERY_WORKER_STATEDB", "database/worker-state.db"
+            )
+            statedb_dir = os.path.dirname(statedb_path)
+            if statedb_dir:
+                os.makedirs(statedb_dir, exist_ok=True)
+            cmd.append(f"--statedb={statedb_path}")
+
+            # ``-E`` enables sending task-related events
+            # (worker_send_task_events) to the broker. The celery-exporter
+            # (monitoring stack) consumes these events to expose Prometheus
+            # metrics (task runtime, success/failure, active tasks, etc.).
+            # Without it the exporter sees no task activity. There is no
+            # exporter in local sqlite mode, and the kombu SQLAlchemy transport
+            # has no fanout support for the event exchange.
+            cmd.append("-E")
 
         logger.info("Starting Celery with command: %s", " ".join(cmd))
         self.worker_process = subprocess.Popen(
