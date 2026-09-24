@@ -1,0 +1,27 @@
+name: Trigger GitLab image build
+
+# Notifies the bimfabrikhh_monitoring GitLab project after a merge to main,
+# passing the commit SHA to build & publish to the GitLab Container Registry.
+#
+# Requires a repository secret `GITLAB_TRIGGER_TOKEN` containing a GitLab
+# Pipeline Trigger Token created on the bimfabrikhh_monitoring project
+# (Settings > CI/CD > Pipeline trigger tokens).
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  trigger-gitlab:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger bimfabrikhh_monitoring pipeline
+        run: |
+          curl --fail -X POST \
+            --form token="${GITLAB_TRIGGER_TOKEN}" \
+            --form ref=main \
+            --form "variables[API_COMMIT_SHA]=${GITHUB_SHA}" \
+            "https://gitlab.opencode.de/api/v4/projects/LGV-BIM-Leitstelle%2Fbimfabrikhh_monitoring/trigger/pipeline"
+        env:
+          GITLAB_TRIGGER_TOKEN: ${{ secrets.GITLAB_TRIGGER_TOKEN }}
