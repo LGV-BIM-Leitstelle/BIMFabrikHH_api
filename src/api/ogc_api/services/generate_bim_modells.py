@@ -754,7 +754,7 @@ def execute_generate_boreholes_model(
         records = processor.parse(xml_root)
         if not records:
             logger.info(NO_BOREHOLES_MESSAGE)
-            # return empty_result(NO_BOREHOLES_MESSAGE)
+            return empty_result(NO_BOREHOLES_MESSAGE)
         logger.info("Found %s boreholes in the bounding box", len(records))
 
         self.update_state(state="PROGRESS", meta={"percent": 75})
