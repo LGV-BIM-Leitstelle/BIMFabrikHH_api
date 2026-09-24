@@ -22,6 +22,6 @@ jobs:
             --form token="${GITLAB_TRIGGER_TOKEN}" \
             --form ref=main \
             --form "variables[API_COMMIT_SHA]=${GITHUB_SHA}" \
-            "https://gitlab.opencode.de/api/v4/projects/LGV-BIM-Leitstelle%2Fbimfabrikhh_monitoring/trigger/pipeline"
+            "https://gitlab.opencode.de/api/v4/projects/12553/trigger/pipeline"
         env:
           GITLAB_TRIGGER_TOKEN: ${{ secrets.GITLAB_TRIGGER_TOKEN }}
