@@ -60,21 +60,32 @@ require_cmd() {
 require_cmd curl
 require_cmd python3
 
+# The API derives the client identity (used for its per-client concurrency
+# limit) from the X-Forwarded-For header. Send a fresh random identity
+# with every request so each job gets its own admission
+# slot instead of all jobs counting against a single client.
+random_client_ip() {
+    echo "10.$((RANDOM % 256)).$((RANDOM % 256)).$((RANDOM % 254 + 1))"
+}
+
 # http_get URL OUTFILE -> prints http status code
 http_get() {
-    curl -s -o "$2" -w '%{http_code}' --max-time 30 "$1"
+    curl -s -o "$2" -w '%{http_code}' --max-time 30 \
+        -H "X-Forwarded-For: $(random_client_ip)" "$1"
 }
 
 # http_post URL DATA_FILE OUTFILE -> prints http status code
 http_post() {
     curl -s -o "$3" -w '%{http_code}' --max-time 30 \
+        -H "X-Forwarded-For: $(random_client_ip)" \
         -X POST -H 'Content-Type: application/json' \
         --data-binary "@$2" "$1"
 }
 
 # http_download URL OUTFILE -> prints http status code
 http_download() {
-    curl -s -o "$2" -w '%{http_code}' --max-time 60 "$1"
+    curl -s -o "$2" -w '%{http_code}' --max-time 60 \
+        -H "X-Forwarded-For: $(random_client_ip)" "$1"
 }
 
 # --- connectivity check --------------------------------------------------
