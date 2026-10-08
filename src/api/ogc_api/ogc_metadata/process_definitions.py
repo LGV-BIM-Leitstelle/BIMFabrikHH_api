@@ -7,11 +7,18 @@ derive from it, so a new process needs one entry here plus its Celery task in
 main_ogc.
 """
 
-from typing import Any, Dict, NamedTuple, Tuple
+from typing import Any, Dict, NamedTuple, Optional, Tuple
 
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 
 PROCESS_VERSION = "0.1.0"
+
+# Well-known container/component identifiers used to pass "level_of_geom"
+# (Detailierungsgrad / LoD) in a process execution request. Must stay in
+# sync with BIMFabrikHH_core's ogc_extractor.json
+# (LEVEL_OF_GEOMETRY_CONTAINER_ID / LEVEL_OF_GEOMETRY_COMPONENT_KEY).
+LEVEL_OF_GEOMETRY_CONTAINER_ID = "level_of_geometry"
+LEVEL_OF_GEOMETRY_COMPONENT_KEY = "level_of_geom"
 
 
 class ProcessSpec(NamedTuple):
@@ -20,6 +27,81 @@ class ProcessSpec(NamedTuple):
     id: str
     title: str
     description: str
+
+
+class LodSpec(NamedTuple):
+    """Valid ``level_of_geom`` range for one process, plus per-value meaning.
+
+    Sourced from the Celery task bodies in ``services/generate_bim_modells.py``:
+    Each ``value_titles`` entry documents what that specific
+    integer does for this process.
+    """
+
+    values: Tuple[int, ...]
+    value_titles: Dict[int, str]
+    summary: str
+
+
+# Per-process level_of_geom (Detailierungsgrad) support. ``None`` means the
+# process does not read level_of_geom at all (no extract_level_of_geometry
+# call in its Celery task).
+LOD_SPECS: Dict[str, Optional[LodSpec]] = {
+    "generate-tree-model": LodSpec(
+        values=(1, 2, 3, 4),
+        value_titles={
+            1: "Lowest crown mesh detail (icosphere subdivision level 1)",
+            2: "Crown mesh detail level 2",
+            3: "Crown mesh detail level 3",
+            4: "Highest crown mesh detail (icosphere subdivision level 4)",
+        },
+        summary="Crown geometry detail level; also written to the IFC _LoG property (100-400).",
+    ),
+    "generate-tree-model-rs": LodSpec(
+        values=(1, 2, 3, 4),
+        value_titles={
+            1: "Lowest crown mesh detail (icosphere subdivision level 1)",
+            2: "Crown mesh detail level 2",
+            3: "Crown mesh detail level 3",
+            4: "Highest crown mesh detail (icosphere subdivision level 4)",
+        },
+        summary="Crown geometry detail level; also written to the IFC _LoG property (100-400).",
+    ),
+    "generate-city-model": LodSpec(
+        values=(1, 2),
+        value_titles={
+            1: "LoD1 block massing",
+            2: "LoD2 detailed roofs",
+        },
+        summary="CityGML level of detail. LoD3 is not available on this process; use generate-city-model-rs.",
+    ),
+    "generate-city-model-rs": LodSpec(
+        values=(1, 2, 3),
+        value_titles={
+            1: "LoD1 block massing",
+            2: "LoD2 detailed roofs",
+            3: "LoD3 detailed facades",
+        },
+        summary="CityGML level of detail.",
+    ),
+    "generate-dgm-model": LodSpec(
+        values=(1, 2),
+        value_titles={
+            1: "Single terrain mesh (default)",
+            2: "Terrain split by ALKIS Nutzung parcels",
+        },
+        summary="Terrain (DGM) generation mode.",
+    ),
+    "generate-dgm-model-rs": LodSpec(
+        values=(1, 2),
+        value_titles={
+            1: "Single terrain mesh (default)",
+            2: "Terrain split by ALKIS Nutzung parcels",
+        },
+        summary="Terrain (DGM) generation mode.",
+    ),
+    "generate-flurstuecke-model": None,
+    "generate-boreholes-model": None,
+}
 
 
 PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
@@ -78,11 +160,121 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
 )
 
 
+def _level_of_geometry_container_schema(lod_spec: LodSpec) -> Dict[str, Any]:
+    """JSON Schema branch for the well-known ``level_of_geometry`` container.
+
+    Constrains ``containerId`` to the fixed value and the ``level_of_geom``
+    component's ``value`` to the process-specific enum, without touching the
+    generic ``Container``/``Component`` schema used by any other container.
+    """
+    value_lines = "; ".join(
+        f"{value}={title}" for value, title in lod_spec.value_titles.items()
+    )
+    return {
+        "type": "object",
+        "required": ["containerId", "components"],
+        "properties": {
+            "containerId": {"const": LEVEL_OF_GEOMETRY_CONTAINER_ID},
+            "components": {
+                "type": "object",
+                "required": [LEVEL_OF_GEOMETRY_COMPONENT_KEY],
+                "properties": {
+                    LEVEL_OF_GEOMETRY_COMPONENT_KEY: {
+                        "type": "object",
+                        "properties": {
+                            "value": {
+                                "type": "integer",
+                                "enum": list(lod_spec.values),
+                                "description": f"{lod_spec.summary} Allowed values: {value_lines}.",
+                            }
+                        },
+                    }
+                },
+            },
+        },
+    }
+
+
+def _containers_input_description(
+    process_id: str, defs: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Build the ``containers`` OGC ``InputDescription`` entry for one process.
+
+    ``containers`` carries generic ``{containerId, components}`` extension
+    data (project info, property sets, ...); when the process also reads
+    ``level_of_geom`` (Detailierungsgrad / LoD), a second ``anyOf`` branch
+    documents the well-known ``level_of_geometry`` container and hard-enums
+    its accepted values for this specific process.
+    """
+    lod_spec = LOD_SPECS.get(process_id)
+    any_of = [{"$ref": "#/$defs/Container"}]
+    description = (
+        "Optional list of extension containers, each carrying a set of named "
+        "components ({containerId, components: {key: {title, value}}}). Used "
+        "to pass metadata (e.g. project info, property sets) alongside bbox."
+    )
+    examples = [
+        [
+            {
+                "containerId": "tree_data",
+                "containerTitle": "Tree Information",
+                "components": {"species": {"title": "Tree Species", "value": "Oak"}},
+            }
+        ]
+    ]
+
+    if lod_spec is not None:
+        any_of.append(_level_of_geometry_container_schema(lod_spec))
+        value_lines = "; ".join(
+            f"{value}={title}" for value, title in lod_spec.value_titles.items()
+        )
+        description += (
+            f" To select the level of detail (Detailierungsgrad), include a container with "
+            f"containerId='{LEVEL_OF_GEOMETRY_CONTAINER_ID}' and a component "
+            f"'{LEVEL_OF_GEOMETRY_COMPONENT_KEY}' whose value is one of "
+            f"{list(lod_spec.values)}. {lod_spec.summary} Allowed values: {value_lines}."
+        )
+        examples.append(
+            [
+                {
+                    "containerId": LEVEL_OF_GEOMETRY_CONTAINER_ID,
+                    "components": {
+                        LEVEL_OF_GEOMETRY_COMPONENT_KEY: {
+                            "title": "Level Of Geometry",
+                            "value": lod_spec.values[0],
+                        }
+                    },
+                }
+            ]
+        )
+    else:
+        description += (
+            " This process does not read level_of_geom (no level of detail selection)."
+        )
+
+    return {
+        "title": "OGC containers (extension components)",
+        "description": description,
+        "minOccurs": 0,
+        "maxOccurs": 1,
+        "schema": {
+            "type": "array",
+            "items": {"anyOf": any_of},
+            "$defs": {"Container": defs["Container"], "Component": defs["Component"]},
+            "examples": examples,
+        },
+    }
+
+
 def create_ifc_process_definition(
     process_id: str, title: str, description: str
 ) -> Dict[str, Any]:
     """
     Create a standardized IFC process definition.
+
+    Builds ``inputs`` as an OGC API - Processes Part 1 conformant map of
+    ``input-id -> InputDescription`` (title, description, schema, minOccurs,
+    maxOccurs), instead of dumping the raw ``RequestParams`` model schema.
 
     Args:
         process_id: Unique identifier for the process.
@@ -92,12 +284,40 @@ def create_ifc_process_definition(
     Returns:
         Dictionary containing the complete process definition.
     """
+    schema = RequestParams.model_json_schema()
+    defs = schema["$defs"]
+    properties = schema["properties"]
+
+    inputs: Dict[str, Any] = {
+        "bbox": {
+            "title": "Bounding box (WGS84)",
+            "description": properties["bbox"]["description"],
+            "minOccurs": 0,
+            "maxOccurs": 1,
+            "schema": {
+                "$ref": "#/$defs/BoundingBoxParams",
+                "$defs": {"BoundingBoxParams": defs["BoundingBoxParams"]},
+            },
+        },
+        "containers": _containers_input_description(process_id, defs),
+        "use_dgm_elevation": {
+            "title": "Use DGM elevation",
+            "description": properties["use_dgm_elevation"]["description"],
+            "minOccurs": 0,
+            "maxOccurs": 1,
+            "schema": {
+                "type": "boolean",
+                "default": properties["use_dgm_elevation"]["default"],
+            },
+        },
+    }
+
     return {
         "id": process_id,
         "title": title,
         "description": description,
         "version": PROCESS_VERSION,
-        "inputs": RequestParams.model_json_schema(),
+        "inputs": inputs,
         "outputs": {
             "ifc_file": {
                 "title": "IFC File Links",

@@ -93,6 +93,21 @@ class TestOGCAPILandingPage:
 class TestProcessesEndpoints:
     """Tests for OGC API Processes endpoints."""
 
+    @staticmethod
+    def _lod_enum(process_description):
+        """Extract the level_of_geom enum from a process description, or None.
+
+        Looks at inputs.containers.schema.items.anyOf for the branch
+        constraining the well-known level_of_geometry container; returns its
+        enum of accepted values, or None if the process has no LoD branch.
+        """
+        any_of = process_description["inputs"]["containers"]["schema"]["items"]["anyOf"]
+        if len(any_of) < 2:
+            return None
+        return any_of[1]["properties"]["components"]["properties"]["level_of_geom"][
+            "properties"
+        ]["value"]["enum"]
+
     def test_list_processes(self, client):
         """Test listing all available processes."""
         response = client.get("/ogc/processes")
@@ -149,7 +164,8 @@ class TestProcessesEndpoints:
         assert data["id"] == "generate-tree-model"
         assert "title" in data
         assert "description" in data
-        assert "inputs" in data
+        assert set(data["inputs"].keys()) == {"bbox", "containers", "use_dgm_elevation"}
+        assert self._lod_enum(data) == [1, 2, 3, 4]
 
     def test_get_process_description_city(self, client):
         """Test getting city model process description."""
@@ -159,21 +175,28 @@ class TestProcessesEndpoints:
         data = response.json()
         assert data["id"] == "generate-city-model"
         assert "title" in data
+        assert self._lod_enum(data) == [1, 2]
 
     def test_get_process_description_tree_rs(self, client):
         response = client.get("/ogc/processes/generate-tree-model-rs")
         assert response.status_code == 200
-        assert response.json()["id"] == "generate-tree-model-rs"
+        data = response.json()
+        assert data["id"] == "generate-tree-model-rs"
+        assert self._lod_enum(data) == [1, 2, 3, 4]
 
     def test_get_process_description_city_rs(self, client):
         response = client.get("/ogc/processes/generate-city-model-rs")
         assert response.status_code == 200
-        assert response.json()["id"] == "generate-city-model-rs"
+        data = response.json()
+        assert data["id"] == "generate-city-model-rs"
+        assert self._lod_enum(data) == [1, 2, 3]
 
     def test_get_process_description_dgm_rs(self, client):
         response = client.get("/ogc/processes/generate-dgm-model-rs")
         assert response.status_code == 200
-        assert response.json()["id"] == "generate-dgm-model-rs"
+        data = response.json()
+        assert data["id"] == "generate-dgm-model-rs"
+        assert self._lod_enum(data) == [1, 2]
 
     def test_get_process_description_dgm(self, client):
         """Test getting DGM model process description."""
@@ -183,6 +206,7 @@ class TestProcessesEndpoints:
         data = response.json()
         assert data["id"] == "generate-dgm-model"
         assert "title" in data
+        assert self._lod_enum(data) == [1, 2]
 
     def test_get_process_description_flurstuecke(self, client):
         """Test getting Flurstuecke model process description."""
@@ -191,6 +215,7 @@ class TestProcessesEndpoints:
 
         data = response.json()
         assert data["id"] == "generate-flurstuecke-model"
+        assert self._lod_enum(data) is None
 
     def test_get_process_description_boreholes(self, client):
         """Test getting borehole model process description."""

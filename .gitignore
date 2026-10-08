@@ -54,6 +54,7 @@ Thumbs.db
 /templates/
 logs/
 monitoring/
+scripts/system_test_output/*
 
 # Server Stack (provided via symlink)
 bimfabrikhh_monitoring/
