@@ -41,6 +41,7 @@ COPY static ./static
 COPY templates ./templates
 COPY main.py ./
 COPY env.example ./.env
+COPY scripts ./scripts
 
 # Configure Poetry to not create a virtualenv
 RUN poetry config virtualenvs.create false
@@ -66,11 +67,10 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11 /usr/local/lib/python3.11
 COPY --from=builder /app /app
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/output /app/temp_files /app/database
-
-# Set proper permissions
-RUN chmod +x /app/main.py
+# Create necessary directories and set proper permissions
+RUN mkdir -p /app/logs /app/output /app/temp_files /app/database \
+    && chmod +x /app/scripts/*.sh \
+    && chmod +x /app/main.py
 
 # Expose port
 EXPOSE 8083
