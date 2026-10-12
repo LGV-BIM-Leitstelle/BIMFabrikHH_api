@@ -29,6 +29,8 @@ from src.api.ogc_api.services.client_identity import get_client_identifier
 from src.api.ogc_api.services.generate_bim_modells import (
     app,
     execute_generate_basepoint_model,
+    execute_generate_biotopes_model,
+    execute_generate_flurstuecke_model,
     execute_generate_boreholes_model,
     execute_generate_boreholes_model_rs,
     execute_generate_city_model,
@@ -66,6 +68,7 @@ PROCESS_TASKS = {
     "generate-city-model": execute_generate_city_model,
     "generate-dgm-model": execute_generate_dgm_model,
     "generate-flurstuecke-model": execute_generate_flurstuecke_model,
+    "generate-biotopes-model": execute_generate_biotopes_model,
     "generate-boreholes-model": execute_generate_boreholes_model,
     "generate-boreholes-model-rs": execute_generate_boreholes_model_rs,
     "generate-basepoint-model": execute_generate_basepoint_model,

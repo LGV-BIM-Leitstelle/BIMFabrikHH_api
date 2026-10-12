@@ -158,6 +158,7 @@ class TestProcessesEndpoints:
             "generate-city-model",
             "generate-dgm-model",
             "generate-flurstuecke-model",
+            "generate-biotopes-model",
             "generate-boreholes-model",
             "generate-boreholes-model-rs",
             "generate-basepoint-model",
@@ -240,6 +241,15 @@ class TestProcessesEndpoints:
 
         data = response.json()
         assert data["id"] == "generate-flurstuecke-model"
+        assert self._lod_enum(data) is None
+
+    def test_get_process_description_biotopes(self, client):
+        """Test getting Biotopes model process description."""
+        response = client.get("/ogc/processes/generate-biotopes-model")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["id"] == "generate-biotopes-model"
         assert self._lod_enum(data) is None
 
     def test_get_process_description_boreholes(self, client):

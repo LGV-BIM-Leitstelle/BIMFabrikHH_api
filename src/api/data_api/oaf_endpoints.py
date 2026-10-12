@@ -166,6 +166,66 @@ def get_oaf_flurstuecke(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
 
 
 @router.get(
+    "/bimfabrikhh-datasets/oaf-biotopes",
+    response_class=Response,
+    tags=["Biotopkataster Hamburg"],
+    description="Get Biotopes from OGC API Features Hamburg",
+)
+def get_oaf_biotopes(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+    """
+    Count biotopes in the umring.
+
+    Geometry is skipped and only one page is fetched: ``numberMatched`` is the
+    full count.
+
+    Args:
+        bbox: Bounding box parameters defining the area of interest.
+
+    Returns:
+        JSONResponse: ``count``, and a German
+        ``message`` the UI can show as-is.
+
+    Raises:
+        HTTPException: If there's an error fetching biotope data.
+    """
+    try:
+        biotopekataster_urls = [
+            api_settings.BIOTOPE_AREAS_PROTECTED_API_URL,
+            api_settings.BIOTOPE_AREAS_UNPROTECTED_API_URL,
+            api_settings.BIOTOPE_LINES_PROTECTED_API_URL,
+            api_settings.BIOTOPE_LINES_UNPROTECTED_API_URL,
+            api_settings.BIOTOPE_POINTS_PROTECTED_API_URL,
+            api_settings.BIOTOPE_POINTS_UNPROTECTED_API_URL
+        ]
+        count = 0
+        for url in biotopekataster_urls:
+            page = HamburgOGCAPI.fetch_data(
+                str(url),
+                {
+                    "f": "json",
+                    "bbox": f"{bbox.min_x},{bbox.min_y},{bbox.max_x},{bbox.max_y}",
+                    "limit": HamburgOGCAPI.DEFAULT_LIMIT,
+                    "skipGeometry": "true",
+                },
+            )
+            count += page.get("numberMatched", len(page.get("features") or []))
+        
+        label = "Biotop" if count == 1 else "Biotope"
+        message = f"{count} {label}"
+        return JSONResponse(
+            content={
+                "count": count,
+                "message": message,
+            }
+        )
+    except Exception as e:
+        LOGGER.error("An error occurred: %s" % e)
+        raise HTTPException(
+            status_code=500, detail=f"Error fetching biotope data: {str(e)}"
+        )
+
+
+@router.get(
     "/bimfabrikhh-datasets/wfs-boreholes",
     response_class=Response,
     tags=["Baugrundaufschlüsse Hamburg"],

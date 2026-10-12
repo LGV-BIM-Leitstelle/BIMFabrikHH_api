@@ -21,6 +21,7 @@ from BIMFabrikHH_core.apps.basepoint.generic.app import BasepointGenericApp
 from BIMFabrikHH_core.apps.city.generic.app import CityGenericApp
 from BIMFabrikHH_core.apps.city.generic_rust import CityRustApp
 from BIMFabrikHH_core.apps.flurstuecke.generic.app import FlurstueckeGenericApp
+from BIMFabrikHH_core.apps.biotopes.generic.app import BiotopesGenericApp
 from BIMFabrikHH_core.apps.terrain.generic.app import TerrainGenericApp
 from BIMFabrikHH_core.apps.terrain.generic_rust import TerrainRustApp
 from BIMFabrikHH_core.apps.trees.column_schema import DEFAULT_OAF_SCHEMA
@@ -41,6 +42,9 @@ from BIMFabrikHH_core.core.ogc_extractor import (
 )
 from BIMFabrikHH_core.data_models.flurstuecke import (
     records_from_geojson_feature_collection as flurstuecke_records_from_geojson,
+)
+from BIMFabrikHH_core.data_models.biotopes import (
+    records_from_geojson_feature_collection as biotopes_records_from_geojson,
 )
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery import Celery
@@ -69,6 +73,8 @@ from ..utils.user_messages import (
     CORE_BOREHOLES_MISSING_MESSAGE,
     FLURSTUECKE_IFC_FAILED_MESSAGE,
     LOD3_ONLY_ON_RS_MESSAGE,
+    NO_BIOTOPES_DATA_MESSAGE,
+    NO_BIOTOPES_MESSAGE,
     NO_BOREHOLE_DATA_MESSAGE,
     NO_BOREHOLES_MESSAGE,
     NO_BUILDINGS_MESSAGE,
@@ -79,6 +85,7 @@ from ..utils.user_messages import (
     NO_TREES_MESSAGE,
     TERRAIN_IFC_FAILED_MESSAGE,
     TREES_IFC_FAILED_MESSAGE,
+    BIOTOPES_IFC_FAILED_MESSAGE,
     to_user_error,
 )
 from .http_requests import DataFetcher, HamburgOGCAPI
@@ -704,6 +711,89 @@ def execute_generate_flurstuecke_model(
     except Exception as e:
         logger.exception(
             "Flurstuecke model generation failed (task %s): %s", self.request.id, e
+        )
+        raise to_user_error(e) from e
+
+
+@app.task(bind=True)
+def execute_generate_biotopes_model(
+    self, input_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Generate a BIM model of biotopes from OAF data.
+
+    Args:
+        self: Celery task instance.
+        input_data: Dictionary containing request parameters including bounding box.
+
+    Returns:
+        Dict containing model information including download URLs.
+
+    Raises:
+        Exception: If model generation fails.
+    """
+    logger.info("Starting biotope model generation (task %s)", self.request.id)
+    try:
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            api_settings.api_default_epsg
+        )
+        ensure_bbox_area(request_params)
+
+        bbox_dict = bbox_to_dict(request_params)
+
+        biotopekataster_urls = [
+            (api_settings.BIOTOPE_AREAS_PROTECTED_API_URL, True),
+            (api_settings.BIOTOPE_AREAS_UNPROTECTED_API_URL, False),
+            (api_settings.BIOTOPE_LINES_PROTECTED_API_URL, True),
+            (api_settings.BIOTOPE_LINES_UNPROTECTED_API_URL, False),
+            (api_settings.BIOTOPE_POINTS_PROTECTED_API_URL, True),
+            (api_settings.BIOTOPE_POINTS_UNPROTECTED_API_URL, False)
+        ]
+
+        records = []
+        for url, is_protected in biotopekataster_urls:
+            raw_biotope_data = HamburgOGCAPI.fetch_all_features(
+                str(url),
+                {
+                    "f": "json",
+                    "bbox": (
+                    f"{bbox_dict['min_x']},{bbox_dict['min_y']},"
+                    f"{bbox_dict['max_x']},{bbox_dict['max_y']}"
+                    ),
+                    "crs": HamburgOGCAPI.DEFAULT_CRS,
+                    "limit": HamburgOGCAPI.DEFAULT_LIMIT,
+                    "skipGeometry": "false",
+                },
+            )
+            if not raw_biotope_data or "features" not in raw_biotope_data:
+                raise ValueError(NO_BIOTOPES_DATA_MESSAGE)
+
+            records.extend(biotopes_records_from_geojson(raw_biotope_data, is_protected=is_protected))
+        if not records:
+            raise ValueError(NO_BIOTOPES_MESSAGE)
+        logger.info("Found %s Biotopes in the bounding box", len(records))
+
+        filename = f"Biotopes_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        output_path = OUTPUT_FOLDER / filename
+
+        ifc_path = BiotopesGenericApp.build_ifc(
+            records,
+            request_params=request_params,
+            output_path=output_path,
+        )
+        if ifc_path is None:
+            raise ValueError(BIOTOPES_IFC_FAILED_MESSAGE)
+
+        logger.info(
+            "Biotope model generated successfully: %s (task %s)",
+            filename,
+            self.request.id,
+        )
+        return ifc_result(filename)
+
+    except Exception as e:
+        logger.exception(
+            "Biotope model generation failed (task %s): %s", self.request.id, e
         )
         raise to_user_error(e) from e
 
