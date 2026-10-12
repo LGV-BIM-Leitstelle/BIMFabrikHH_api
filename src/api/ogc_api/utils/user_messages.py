@@ -38,6 +38,22 @@ NO_FLURSTUECKE_MESSAGE = (
     "Im gewählten Umring wurden keine Flurstücke gefunden. "
     "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
 )
+NO_BIOTOPES_DATA_MESSAGE = (
+    "Es konnten keine Biotopdaten für den gewählten Umring geladen werden. "
+    "Bitte wählen Sie einen anderen Bereich."
+)
+NO_BIOTOPES_MESSAGE = (
+    "Im gewählten Umring wurden keine Biotope gefunden. "
+    "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
+)
+NO_BOREHOLE_DATA_MESSAGE = (
+    "Es konnten keine Bohrungsdaten für den gewählten Umring geladen werden. "
+    "Bitte wählen Sie einen anderen Bereich."
+)
+NO_BOREHOLES_MESSAGE = (
+    "Im gewählten Umring wurden keine Bohrungen gefunden. "
+    "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
+)
 LOD3_ONLY_ON_RS_MESSAGE = (
     "LoD3 steht in diesem Prozess nicht zur Verfügung. "
     "Bitte wählen Sie LoD1 oder LoD2, oder starten Sie die Erzeugung über das Rust-Stadtmodell."
@@ -54,13 +70,9 @@ FLURSTUECKE_IFC_FAILED_MESSAGE = (
     "Das Flurstücksmodell konnte nicht erzeugt werden. "
     "Bitte versuchen Sie es erneut oder wählen Sie einen anderen Umring."
 )
-NO_BOREHOLE_DATA_MESSAGE = (
-    "Es konnten keine Bohrungsdaten für den gewählten Umring geladen werden. "
-    "Bitte wählen Sie einen anderen Bereich."
-)
-NO_BOREHOLES_MESSAGE = (
-    "Im gewählten Umring wurden keine Bohrungen gefunden. "
-    "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
+BIOTOPES_IFC_FAILED_MESSAGE = (
+    "Das Biotopmodell konnte nicht erzeugt werden. "
+    "Bitte versuchen Sie es erneut oder wählen Sie einen anderen Umring."
 )
 BOREHOLES_IFC_FAILED_MESSAGE = (
     "Das Bohrungsmodell konnte nicht erzeugt werden. "
@@ -108,7 +120,7 @@ def too_many_jobs_message(limit: int) -> str:
 
 
 def process_not_found_message(process_id: str) -> str:
-    return f'Der Prozess „{process_id}“ wurde nicht gefunden.'
+    return f"Der Prozess „{process_id}“ wurde nicht gefunden."
 
 
 _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(

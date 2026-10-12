@@ -64,6 +64,8 @@ from ..utils.user_messages import (
     CORE_BOREHOLES_MISSING_MESSAGE,
     FLURSTUECKE_IFC_FAILED_MESSAGE,
     LOD3_ONLY_ON_RS_MESSAGE,
+    NO_BIOTOPES_DATA_MESSAGE,
+    NO_BIOTOPES_MESSAGE,
     NO_BOREHOLE_DATA_MESSAGE,
     NO_BOREHOLES_MESSAGE,
     NO_BUILDINGS_MESSAGE,
@@ -74,6 +76,7 @@ from ..utils.user_messages import (
     NO_TREES_MESSAGE,
     TERRAIN_IFC_FAILED_MESSAGE,
     TREES_IFC_FAILED_MESSAGE,
+    BIOTOPES_IFC_FAILED_MESSAGE,
     to_user_error,
 )
 from .http_requests import DataFetcher, HamburgOGCAPI
@@ -712,6 +715,86 @@ def execute_generate_flurstuecke_model(
     except Exception as e:
         logger.exception(
             "Flurstuecke model generation failed (task %s): %s", self.request.id, e
+        )
+        raise to_user_error(e) from e
+
+
+@app.task(bind=True)
+def execute_generate_biotopes_model(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generate a BIM model of Biotopkataster Hamburg from OAF data.
+
+    Args:
+        self: Celery task instance.
+        input_data: Dictionary containing request parameters including bounding box.
+
+    Returns:
+        Dict containing model information including download URLs.
+
+    Raises:
+        Exception: If model generation fails.
+    """
+    self.update_state(state="PROGRESS", meta={"percent": 0})
+
+    logger.info("Starting biotope model generation (task %s)", self.request.id)
+    try:
+        request_params = RequestParams(**input_data)
+        ensure_bbox_area(request_params)
+
+        self.update_state(state="PROGRESS", meta={"percent": 25})
+        bbox_dict = bbox_to_dict(request_params)
+
+        self.update_state(state="PROGRESS", meta={"percent": 50})
+        raw_biotop_data = HamburgOGCAPI.fetch_all_features(
+            str(api_settings.BIOTOPKATASTER_API_URL),
+            {
+                "f": "json",
+                "bbox": (
+                    f"{bbox_dict['min_x']},{bbox_dict['min_y']},"
+                    f"{bbox_dict['max_x']},{bbox_dict['max_y']}"
+                ),
+                "crs": HamburgOGCAPI.DEFAULT_CRS,
+                "limit": HamburgOGCAPI.DEFAULT_LIMIT,
+                "skipGeometry": "false",
+            },
+        )
+        if not raw_biotop_data or "features" not in raw_biotop_data:
+            raise ValueError(NO_BIOTOPES_DATA_MESSAGE)
+
+        # The fetch asks for EPSG:25832 geometries, which is the CRS the app
+        # extrudes the parcel footprints in.
+        records = flurstuecke_records_from_geojson(
+            raw_biotop_data, geometry_crs="EPSG:25832"
+        )
+        if not records:
+            logger.info(NO_BIOTOPES_MESSAGE)
+            return empty_result(NO_BIOTOPES_MESSAGE)
+        logger.info("Found %s biotopes in the bounding box", len(records))
+
+        self.update_state(state="PROGRESS", meta={"percent": 75})
+        filename = f"Biotopkataster_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        output_path = OUTPUT_FOLDER / filename
+
+        ifc_path = FlurstueckeGenericApp.build_ifc(
+            records,
+            request_params=request_params,
+            output_path=output_path,
+        )
+        if ifc_path is None:
+            raise ValueError(BIOTOPES_IFC_FAILED_MESSAGE)
+
+        self.update_state(state="PROGRESS", meta={"percent": 100})
+
+        logger.info(
+            "Biotope model generated successfully: %s (task %s)",
+            filename,
+            self.request.id,
+        )
+        return ifc_result(filename)
+
+    except Exception as e:
+        logger.exception(
+            "Biotope model generation failed (task %s): %s", self.request.id, e
         )
         raise to_user_error(e) from e
 

@@ -84,6 +84,9 @@ class APISettings(BaseSettings):
     # ALKIS Flurstueck API (flurstuecke app)
     FLURSTUECKE_API_URL: HttpUrl
 
+    # ALKIS Biotopkataster API (biotopkataster app)
+    BIOTOPKATASTER_API_URL: HttpUrl
+
     # WFS BOREHOLE API (borehole app)
     WFS_BOREHOLE_API_URL: HttpUrl
     WFS_BOREHOLE_HEADER_API_URL: HttpUrl
@@ -208,8 +211,9 @@ class APISettings(BaseSettings):
             f"  Trees Hafen API:     {self.TREES_HAFEN_API_URL}",
             f"  DGM tiles API:       {self.DGM_TILES_API_URL}",
             f"  Flurstuecke API:     {self.FLURSTUECKE_API_URL}",
-            f"  WFS Borehole API:       {self.WFS_BOREHOLE_API_URL}",
-            f"  WFS Borehole Header:    {self.WFS_BOREHOLE_HEADER_API_URL}",
+            f"  Biotopkataster API:  {self.BIOTOPKATASTER_API_URL}",
+            f"  WFS Borehole API:    {self.WFS_BOREHOLE_API_URL}",
+            f"  WFS Borehole Header: {self.WFS_BOREHOLE_HEADER_API_URL}",
             f"  API timeout:         {self.API_TIMEOUT}s",
             f"  API default limit:   {self.API_DEFAULT_LIMIT}",
             f"  API default CRS:     {self.API_DEFAULT_CRS}",
