@@ -54,8 +54,10 @@ This project is under intensive development. Features are being added and improv
 - **Asynchronous Processing** - Celery workers for background task execution
 - **Multiple Model Types**:
     - Tree Models - Street trees from cadastral data with elevation
-    - City Models - Buildings from CityGML (LoD1/LoD2)
+    - City Models - Buildings from CityGML (LoD1/LoD2/LoD3)
     - Terrain Models - Digital Ground Models (DGM) from GeoTIFF
+    - Flurstueck Models - ALKIS cadastral parcels from OGC API Features collection
+    - Borehole Models - Baugrundaufschlüsse from BoreholeML
 - **In-Memory Processing** - GeoTIFF files and CityGML city model XML files are processed directly from URLs
 - **Docker Ready** - Container images published to GitHub Container Registry
 
@@ -166,7 +168,7 @@ Generates IFC models of buildings from CityGML data.
 
 **Features:**
 
-- LoD1 and LoD2 support
+- LoD1, LoD2 and LoD3 support
 - Building geometries and attributes
 - Automatic tile fetching
 - Color-coded representations
