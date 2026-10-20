@@ -54,8 +54,10 @@ This project is under intensive development. Features are being added and improv
 - **Asynchronous Processing** - Celery workers for background task execution
 - **Multiple Model Types**:
     - Tree Models - Street trees from cadastral data with elevation
-    - City Models - Buildings from CityGML (LoD1/LoD2)
+    - City Models - Buildings from CityGML (LoD1/LoD2/LoD3)
     - Terrain Models - Digital Ground Models (DGM) from GeoTIFF
+    - Flurstueck Models - ALKIS cadastral parcels from OGC API Features collection
+    - Borehole Models - Baugrundaufschlüsse from BoreholeML
 - **In-Memory Processing** - GeoTIFF files and CityGML city model XML files are processed directly from URLs
 - **Docker Ready** - Container images published to GitHub Container Registry
 
@@ -166,7 +168,7 @@ Generates IFC models of buildings from CityGML data.
 
 **Features:**
 
-- LoD1 and LoD2 support
+- LoD1, LoD2 and LoD3 support
 - Building geometries and attributes
 - Automatic tile fetching
 - Color-coded representations
@@ -268,29 +270,6 @@ docker stop bimfabrikhh-api
 
 # Start container
 docker start bimfabrikhh-api
-```
-
-**Run container with redis backend and broker via podman**
-The redis backend is intended for production-like setups. It includes rate and concurrency limiting on the processing endpoint, configurable via environmet varibales, see [env.example](env.example).
-```bash
-# Set up pod
-podman pod create --name bimfabrikhh-pod -p 6379:6379 -p 8083:8083
-podman run -d --pod bimfabrikhh-pod --name redis-backend redis:7
-podman run -d \
-  --pod bimfabrikhh-pod \
-  --name bimfabrikhh-api \
-  -v /path/to/output:/app/output \
-  --restart unless-stopped \
-  --env-file .env \
-  ghcr.io/lgv-bim-leitstelle/bimfabrikhh_api:latest \
-  --db redis
-
-# View logs
-podman logs -f bimfabrikhh-api
-podman logs -f redis-backend
-
-# stop the pod
-podman pod stop bimfabrikhh-pod
 ```
 
 ### Configuration
