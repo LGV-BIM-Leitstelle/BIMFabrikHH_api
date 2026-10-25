@@ -102,6 +102,9 @@ class TestCityModelGeneration:
 
             # Verify result structure
             mock_app.from_gml_files.assert_called_once()
+            # The tiles are UTM 32N with DHHN2016 heights.
+            request_params = mock_app.from_gml_files.call_args.kwargs["request_params"]
+            assert (request_params.source_epsg, request_params.vertical_epsg) == (25832, 7837)
             assert "model" in result
             assert result["model"]["filename"].startswith("Stadtmodell_")
             assert result["model"]["content_type"] == "application/x-step"

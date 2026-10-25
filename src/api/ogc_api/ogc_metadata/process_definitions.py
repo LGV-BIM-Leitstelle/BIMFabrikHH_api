@@ -9,7 +9,7 @@ main_ogc.
 
 from typing import Any, Dict, NamedTuple, Optional, Tuple
 
-from BIMFabrikHH_core.data_models.params_tree import RequestParams
+from src.api.ogc_api.models.process_inputs import ProcessInputs
 
 PROCESS_VERSION = "0.1.0"
 # Every process runs as a Celery job: execution returns 201 + a job, and the
@@ -278,7 +278,7 @@ def create_ifc_process_definition(
 
     Builds ``inputs`` as an OGC API - Processes Part 1 conformant map of
     ``input-id -> InputDescription`` (title, description, schema, minOccurs,
-    maxOccurs), instead of dumping the raw ``RequestParams`` model schema.
+    maxOccurs), instead of dumping the raw ``ProcessInputs`` model schema.
 
     Args:
         process_id: Unique identifier for the process.
@@ -288,7 +288,7 @@ def create_ifc_process_definition(
     Returns:
         Dictionary containing the complete process definition.
     """
-    schema = RequestParams.model_json_schema()
+    schema = ProcessInputs.model_json_schema()
     defs = schema["$defs"]
     properties = schema["properties"]
 
@@ -313,6 +313,13 @@ def create_ifc_process_definition(
                 "type": "boolean",
                 "default": properties["use_dgm_elevation"]["default"],
             },
+        },
+        "output_epsg": {
+            "title": "Output coordinate system (EPSG code)",
+            "description": properties["output_epsg"]["description"],
+            "minOccurs": 0,
+            "maxOccurs": 1,
+            "schema": {"type": "integer"},
         },
     }
 

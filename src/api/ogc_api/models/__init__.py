@@ -1,6 +1,6 @@
 """
 OGC API models package.
 
-This package contains data models for OGC API - Processes including
-job status tracking, process parameters, and response schemas.
+This package contains the data models of the OGC API - Processes, currently
+the inputs a client sends to execute a process (``process_inputs``).
 """

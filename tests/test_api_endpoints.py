@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from src.api.ogc_api.utils.ogc_exceptions import NO_SUCH_PROCESS, RESULT_NOT_READY
 from src.api.ogc_api.utils.user_messages import (
+    INVALID_INPUT_MESSAGE,
     JOB_FAILED_FALLBACK_MESSAGE,
     JOB_NOT_READY_MESSAGE,
     JOB_TIMEOUT_MESSAGE,
@@ -175,7 +176,12 @@ class TestProcessesEndpoints:
         assert data["id"] == "generate-tree-model"
         assert "title" in data
         assert "description" in data
-        assert set(data["inputs"].keys()) == {"bbox", "containers", "use_dgm_elevation"}
+        assert set(data["inputs"].keys()) == {
+            "bbox",
+            "containers",
+            "use_dgm_elevation",
+            "output_epsg",
+        }
         assert self._lod_enum(data) == [1, 2, 3, 4]
 
     def test_get_process_description_city(self, client):
@@ -398,6 +404,34 @@ class TestProcessExecution:
         )
 
         assert response.status_code == 400
+
+    @pytest.mark.parametrize(
+        "extra, failing_input",
+        [
+            ({"source_epsg": 10285}, "source_epsg"),
+            ({"vertical_epsg": 7837}, "vertical_epsg"),
+            ({"output_epsg": 4326}, "inputs"),
+        ],
+    )
+    def test_execute_rejects_source_codes_and_invalid_output_epsg(
+        self, client, valid_execution_input, extra, failing_input
+    ):
+        """source_epsg / vertical_epsg are set by the API; output_epsg must be projected."""
+        valid_execution_input["inputs"].update(extra)
+
+        response = client.post(
+            "/ogc/processes/generate-tree-model/execution", json=valid_execution_input
+        )
+
+        assert response.status_code == 400
+        body = response.json()
+        assert (body["type"], body["title"], body["status"]) == (
+            "about:blank",
+            "Bad Request",
+            400,
+        )
+        assert body["detail"] == INVALID_INPUT_MESSAGE
+        assert [error["input"] for error in body["errors"]] == [failing_input]
 
     def test_execute_with_empty_body(self, client):
         """Test executing process with empty request body."""

@@ -95,6 +95,8 @@ class TestDGMModelGeneration:
             # Verify result structure
             mock_app.from_geotiffs.assert_called_once()
             assert mock_app.from_geotiffs.call_args.kwargs.get("guide_from_oaf") is False
+            request_params = mock_app.from_geotiffs.call_args.kwargs["request_params"]
+            assert (request_params.source_epsg, request_params.vertical_epsg) == (25832, 7837)
             assert "model" in result
             assert result["model"]["filename"].startswith("DGM_")
             assert result["model"]["content_type"] == "application/x-step"

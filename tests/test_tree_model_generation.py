@@ -10,8 +10,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
-from BIMFabrikHH_core.data_models.params_tree import Component, Container, RequestParams
+from BIMFabrikHH_core.data_models.params_tree import Component, Container
 
+from src.api.config.settings import api_settings
+from src.api.ogc_api.models.process_inputs import ProcessInputs
 from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_tree_model,
     execute_generate_tree_model_rs,
@@ -46,7 +48,7 @@ def valid_request_params():
         },
     )
 
-    return RequestParams(
+    return ProcessInputs(
         bbox=BoundingBoxParams(
             min_x=9.9756, min_y=53.5522, max_x=9.9789, max_y=53.5536
         ),
@@ -89,6 +91,9 @@ class TestTreeModelGeneration:
         ), patch(
             "src.api.ogc_api.services.generate_bim_modells.extract_psets_basepoint"
         ) as mock_psets, patch(
+            "src.api.ogc_api.services.generate_bim_modells.tree_dgm_tiles",
+            return_value=(["dgm_tile.tif"], "/dgm"),
+        ), patch(
             "src.api.ogc_api.services.generate_bim_modells.TreesGenericApp"
         ) as mock_app:
 
@@ -104,6 +109,12 @@ class TestTreeModelGeneration:
 
             # Verify the IFC build was invoked and the result structure is correct
             mock_app.build_ifc.assert_called_once()
+            # Tree Z sampled from the DGM tiles is DHHN2016.
+            build_kwargs = mock_app.build_ifc.call_args.kwargs
+            assert (build_kwargs["source_epsg"], build_kwargs["vertical_epsg"]) == (
+                api_settings.api_default_epsg,
+                7837,
+            )
             assert "model" in result
             assert result["model"]["filename"].startswith("Baeume_")
             assert result["model"]["content_type"] == "application/x-step"

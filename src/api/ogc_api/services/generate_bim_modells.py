@@ -32,7 +32,7 @@ from BIMFabrikHH_core.apps.trees.processing import (
 )
 from BIMFabrikHH_core.config.paths import local_dir_or_raw
 from BIMFabrikHH_core.core.data_processing import DataProcessor
-from BIMFabrikHH_core.core.georeferencing import bbox_request_params_to_epsg25832
+from BIMFabrikHH_core.core.georeferencing import DGM_TILE_VERTICAL_EPSG
 from BIMFabrikHH_core.core.ogc_extractor import (
     extract_level_of_geometry,
     extract_psets_basepoint,
@@ -49,6 +49,7 @@ from src.api.config.logging_config import setup_logging as configure_logging
 from src.api.config.settings import api_settings
 from src.database import get_celery_config
 
+from ..models.process_inputs import ProcessInputs
 from ..utils.lod_utils import (
     gml_paths_for_rust,
     lod_folder_url,
@@ -86,6 +87,14 @@ except ImportError:  # core feat/boreholes is not on main yet
 
 # Output folder for generated IFC files
 OUTPUT_FOLDER = Path(api_settings.OUTPUT_FOLDER_PATH)
+
+# The borehole WFS delivers EPSG:5555 = EPSG:25832 positions + EPSG:5783 (DHHN92)
+# heights. Heights are never transformed, so the two parts are declared separately.
+BOREHOLE_SOURCE_EPSG = 25832
+BOREHOLE_VERTICAL_EPSG = 5783
+# CityGML and DGM tiles are stored in EPSG:25832 with DHHN2016 heights
+# (DGM_TILE_VERTICAL_EPSG); tree Z sampled from the DGM tiles is DHHN2016 too.
+TILE_SOURCE_EPSG = 25832
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +279,9 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
     logger.info("Input data for tree model generation: %s", input_data)
     try:
-        request_params = RequestParams(**input_data)
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            api_settings.api_default_epsg
+        )
         ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
@@ -323,6 +334,9 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             basepoint_psets=basepoint_psets if basepoint_psets else None,
             tif_files=tif_files,
             dgm_folder=folder,
+            source_epsg=request_params.source_epsg,
+            output_epsg=request_params.output_epsg,
+            vertical_epsg=DGM_TILE_VERTICAL_EPSG if tif_files is not None else None,
         )
 
         self.update_state(state="PROGRESS", meta={"percent": 100})
@@ -344,7 +358,9 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
     """Same fetch/records as generate-tree-model; IFC via TreesRustApp."""
     self.update_state(state="PROGRESS", meta={"percent": 0})
     try:
-        request_params = RequestParams(**input_data)
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            api_settings.api_default_epsg
+        )
         ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
@@ -379,14 +395,15 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
             return empty_result(NO_TREES_MESSAGE)
 
         self.update_state(state="PROGRESS", meta={"percent": 75})
-        bbox_utm = bbox_request_params_to_epsg25832(request_params)
-        basepoint = (bbox_utm[0], bbox_utm[1]) if bbox_utm else None
         written = TreesRustApp.build_ifc(
             records,
             output_path=output_path,
-            basepoint_origin=basepoint,
+            bbox_wgs84=request_params.bbox_as_wgs84_tuple,
             tif_files=tif_files,
             dgm_folder=folder,
+            source_epsg=request_params.source_epsg,
+            output_epsg=request_params.output_epsg,
+            vertical_epsg=DGM_TILE_VERTICAL_EPSG if tif_files is not None else None,
         )
         if written is None:
             raise ValueError(TREES_IFC_FAILED_MESSAGE)
@@ -421,7 +438,9 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
     logger.info("Starting city model generation (task %s)", self.request.id)
     try:
-        request_params = RequestParams(**input_data)
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            TILE_SOURCE_EPSG, DGM_TILE_VERTICAL_EPSG
+        )
         ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
@@ -491,7 +510,9 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
     """Same tile fetch as generate-city-model; IFC via CityRustApp (mesh)."""
     self.update_state(state="PROGRESS", meta={"percent": 0})
     try:
-        request_params = RequestParams(**input_data)
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            TILE_SOURCE_EPSG, DGM_TILE_VERTICAL_EPSG
+        )
         ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
@@ -551,7 +572,9 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
     logger.info("Starting DGM model generation (task %s)", self.request.id)
     try:
         # Extract request parameters
-        request_params = RequestParams(**input_data)
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            TILE_SOURCE_EPSG, DGM_TILE_VERTICAL_EPSG
+        )
         ensure_bbox_area(request_params)
         bbox_dict = bbox_to_dict(request_params)
 
@@ -597,7 +620,9 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
 def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
     """Same GeoTIFF fetch as generate-dgm-model; mesh in Python, IFC via TerrainRustApp."""
     try:
-        request_params = RequestParams(**input_data)
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            TILE_SOURCE_EPSG, DGM_TILE_VERTICAL_EPSG
+        )
         ensure_bbox_area(request_params)
         bbox_dict = bbox_to_dict(request_params)
 
@@ -655,7 +680,9 @@ def execute_generate_flurstuecke_model(
 
     logger.info("Starting Flurstuecke model generation (task %s)", self.request.id)
     try:
-        request_params = RequestParams(**input_data)
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            api_settings.api_default_epsg
+        )
         ensure_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})
@@ -678,11 +705,7 @@ def execute_generate_flurstuecke_model(
         if not raw_flurstueck_data or "features" not in raw_flurstueck_data:
             raise ValueError(NO_FLURSTUECK_DATA_MESSAGE)
 
-        # The fetch asks for EPSG:25832 geometries, which is the CRS the app
-        # extrudes the parcel footprints in.
-        records = flurstuecke_records_from_geojson(
-            raw_flurstueck_data, geometry_crs="EPSG:25832"
-        )
+        records = flurstuecke_records_from_geojson(raw_flurstueck_data)
         if not records:
             logger.info(NO_FLURSTUECKE_MESSAGE)
             return empty_result(NO_FLURSTUECKE_MESSAGE)
@@ -737,7 +760,9 @@ def execute_generate_boreholes_model(
 
     logger.info("Starting borehole model generation (task %s)", self.request.id)
     try:
-        request_params = RequestParams(**input_data)
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            BOREHOLE_SOURCE_EPSG, BOREHOLE_VERTICAL_EPSG
+        )
         ensure_borehole_bbox_area(request_params)
 
         self.update_state(state="PROGRESS", meta={"percent": 25})

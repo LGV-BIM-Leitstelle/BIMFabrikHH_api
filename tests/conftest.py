@@ -14,8 +14,9 @@ from unittest.mock import Mock, patch
 import pytest
 from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
 from BIMFabrikHH_core.data_models.params_tree import Component, Container
-from BIMFabrikHH_core.data_models.params_tree import RequestParams as TreeRequestParams
 from celery import states
+
+from src.api.ogc_api.models.process_inputs import ProcessInputs
 
 # Add the project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -167,7 +168,7 @@ def valid_tree_request_params():
             "type": Component(title="Data Type", value="Tree Inventory"),
         },
     )
-    return TreeRequestParams(
+    return ProcessInputs(
         bbox=BoundingBoxParams(
             min_x=9.9756, min_y=53.5522, max_x=9.9789, max_y=53.5536
         ),
@@ -185,7 +186,7 @@ def valid_city_request_params():
             "height": Component(title="Building Height", value=25.0),
         },
     )
-    return TreeRequestParams(
+    return ProcessInputs(
         bbox=BoundingBoxParams(
             min_x=9.9756, min_y=53.5522, max_x=9.9789, max_y=53.5536
         ),
@@ -203,7 +204,7 @@ def valid_dgm_request_params():
             "elevation": Component(title="Elevation Range", value="0-100m"),
         },
     )
-    return TreeRequestParams(
+    return ProcessInputs(
         bbox=BoundingBoxParams(
             min_x=9.9756, min_y=53.5522, max_x=9.9789, max_y=53.5536
         ),
@@ -223,7 +224,7 @@ def valid_flurstuecke_request_params():
             "type": Component(title="Data Type", value="Cadastral Parcels"),
         },
     )
-    return TreeRequestParams(
+    return ProcessInputs(
         bbox=BoundingBoxParams(
             min_x=9.9756, min_y=53.5522, max_x=9.9789, max_y=53.5536
         ),
@@ -243,7 +244,7 @@ def valid_boreholes_request_params():
             "type": Component(title="Data Type", value="Boreholes"),
         },
     )
-    return TreeRequestParams(
+    return ProcessInputs(
         bbox=BoundingBoxParams(
             min_x=9.9756, min_y=53.5522, max_x=9.9789, max_y=53.5536
         ),

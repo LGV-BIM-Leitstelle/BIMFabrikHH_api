@@ -11,7 +11,6 @@ BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>
 import datetime
 import logging
 
-from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery import states
 from celery.exceptions import TimeLimitExceeded
 from celery.result import AsyncResult
@@ -20,6 +19,7 @@ from fastapi.responses import JSONResponse
 
 from src.api.analytics import record_bbox_request
 from src.api.config.settings import admission_control_enabled, api_settings
+from src.api.ogc_api.models.process_inputs import ProcessInputs
 from src.api.ogc_api.ogc_metadata.dict_conformance import content_conformance
 from src.api.ogc_api.ogc_metadata.dict_landing_page import content_landing_page
 from src.api.ogc_api.ogc_metadata.dict_processes import content_get_processes
@@ -223,7 +223,7 @@ def execute_process(
     processID: str,
     request: Request,
     background_tasks: BackgroundTasks,
-    inputs: RequestParams = Body(..., embed=True),
+    inputs: ProcessInputs = Body(..., embed=True),
 ) -> JSONResponse:
     """
     Execute a specified OGC process with provided input parameters.
