@@ -38,6 +38,11 @@ from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_tree_model_rs,
 )
 from src.api.ogc_api.services.rate_limit import execution_rate_limit
+from src.api.ogc_api.utils.ogc_exceptions import (
+    NO_SUCH_PROCESS,
+    RESULT_NOT_READY,
+    OgcHTTPException,
+)
 from src.api.ogc_api.utils.user_messages import (
     JOB_CANCELLED_MESSAGE,
     JOB_CANNOT_CANCEL_MESSAGE,
@@ -171,8 +176,8 @@ def get_process(processID: str) -> JSONResponse:
     """
     description = PROCESS_DEFINITIONS.get(processID)
     if description is None:
-        raise HTTPException(
-            status_code=404, detail=process_not_found_message(processID)
+        raise OgcHTTPException(
+            404, NO_SUCH_PROCESS, process_not_found_message(processID)
         )
     return JSONResponse(content=description)
 
@@ -243,8 +248,8 @@ def execute_process(
     """
     task_fn = PROCESS_TASKS.get(processID)
     if task_fn is None:
-        raise HTTPException(
-            status_code=404, detail=process_not_found_message(processID)
+        raise OgcHTTPException(
+            404, NO_SUCH_PROCESS, process_not_found_message(processID)
         )
 
     # Determine the client identifier.
@@ -413,4 +418,4 @@ def get_job_results(jobId: str) -> JSONResponse:
         logger.error("Results requested for failed job %s: %s", jobId, message)
         raise HTTPException(status_code=500, detail=message)
     else:
-        raise HTTPException(status_code=404, detail=JOB_NOT_READY_MESSAGE)
+        raise OgcHTTPException(404, RESULT_NOT_READY, JOB_NOT_READY_MESSAGE)

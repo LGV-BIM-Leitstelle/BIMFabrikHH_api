@@ -31,6 +31,7 @@ from .ogc_api.ogc_metadata.app_info import (
 )
 from .ogc_api.routes.main_ogc import router_ogc
 from .ogc_api.services.rate_limit import close_rate_limiter, init_rate_limiter
+from .ogc_api.utils.ogc_exceptions import register_ogc_exception_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ def create_app() -> FastAPI:
     # Include routers
     data_app.include_router(oaf_router)
     ogc_app.include_router(router_ogc)
+    register_ogc_exception_handlers(ogc_app)
 
     # Lifespan context manager for rate limiter
     @asynccontextmanager

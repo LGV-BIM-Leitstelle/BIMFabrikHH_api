@@ -12,6 +12,10 @@ from typing import Any, Dict, NamedTuple, Optional, Tuple
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
 
 PROCESS_VERSION = "0.1.0"
+# Every process runs as a Celery job: execution returns 201 + a job, and the
+# result (the IFC download links) is returned by value from /jobs/{id}/results.
+JOB_CONTROL_OPTIONS = ["async-execute"]
+OUTPUT_TRANSMISSION = ["value"]
 
 # Well-known container/component identifiers used to pass "level_of_geom"
 # (Detailierungsgrad / LoD) in a process execution request. Must stay in
@@ -317,6 +321,8 @@ def create_ifc_process_definition(
         "title": title,
         "description": description,
         "version": PROCESS_VERSION,
+        "jobControlOptions": JOB_CONTROL_OPTIONS,
+        "outputTransmission": OUTPUT_TRANSMISSION,
         "inputs": inputs,
         "outputs": {
             "ifc_file": {

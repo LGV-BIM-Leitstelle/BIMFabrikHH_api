@@ -12,8 +12,10 @@ import pytest
 from celery.exceptions import TimeLimitExceeded
 from fastapi.testclient import TestClient
 
+from src.api.ogc_api.utils.ogc_exceptions import NO_SUCH_PROCESS, RESULT_NOT_READY
 from src.api.ogc_api.utils.user_messages import (
     JOB_FAILED_FALLBACK_MESSAGE,
+    JOB_NOT_READY_MESSAGE,
     JOB_TIMEOUT_MESSAGE,
 )
 from src.api.web_app import create_app
@@ -132,6 +134,15 @@ class TestProcessesEndpoints:
         assert "title" in first_process
         assert "description" in first_process
 
+    def test_processes_declare_async_execution(self, client):
+        """Process summaries and descriptions declare OGC job control and output transmission."""
+        summaries = client.get("/ogc/processes").json()["processes"]
+        description = client.get("/ogc/processes/generate-tree-model").json()
+
+        for process in [*summaries, description]:
+            assert process["jobControlOptions"] == ["async-execute"]
+            assert process["outputTransmission"] == ["value"]
+
     def test_list_processes_contains_expected_processes(self, client):
         """Test that all expected processes are listed."""
         response = client.get("/ogc/processes")
@@ -232,7 +243,8 @@ class TestProcessesEndpoints:
         assert response.status_code == 404
 
         data = response.json()
-        assert "detail" in data
+        assert (data["type"], data["status"]) == (NO_SUCH_PROCESS, 404)
+        assert "nonexistent-process" in data["detail"]
 
 
 class TestProcessExecution:
@@ -365,6 +377,7 @@ class TestProcessExecution:
         )
 
         assert response.status_code == 404
+        assert response.json()["type"] == NO_SUCH_PROCESS
 
     def test_execute_with_invalid_input_missing_bbox(self, client):
         """Test executing process with missing bbox."""
@@ -374,7 +387,7 @@ class TestProcessExecution:
             "/ogc/processes/generate-tree-model/execution", json=invalid_input
         )
 
-        assert response.status_code == 422  # Validation error
+        assert response.status_code == 400  # Validation error
 
     def test_execute_with_invalid_input_wrong_type(self, client):
         """Test executing process with wrong input type."""
@@ -384,13 +397,13 @@ class TestProcessExecution:
             "/ogc/processes/generate-tree-model/execution", json=invalid_input
         )
 
-        assert response.status_code == 422
+        assert response.status_code == 400
 
     def test_execute_with_empty_body(self, client):
         """Test executing process with empty request body."""
         response = client.post("/ogc/processes/generate-tree-model/execution", json={})
 
-        assert response.status_code == 422
+        assert response.status_code == 400
 
     def test_execute_without_json_content_type(self, client, valid_execution_input):
         """Test executing process without JSON content type."""
@@ -401,9 +414,9 @@ class TestProcessExecution:
         )
 
         assert response.status_code in [
+            400,
             415,
-            422,
-        ]  # Unsupported media type or validation error
+        ]  # Validation error or unsupported media type
 
 
 class TestJobStatusEndpoints:
@@ -530,6 +543,8 @@ class TestJobStatusEndpoints:
 
         response = client.get("/ogc/jobs/test-job-pending/results")
         assert response.status_code == 404
+        assert response.json()["type"] == RESULT_NOT_READY
+        assert response.json()["detail"] == JOB_NOT_READY_MESSAGE
 
     @patch("src.api.ogc_api.routes.main_ogc.AsyncResult")
     def test_get_job_results_failed(self, mock_async_result, client):
@@ -637,7 +652,7 @@ class TestErrorHandling:
             headers={"Content-Type": "application/json"},
         )
 
-        assert response.status_code == 422
+        assert response.status_code == 400
 
 
 class TestInputValidation:
@@ -660,7 +675,7 @@ class TestInputValidation:
             "/ogc/processes/generate-tree-model/execution", json=invalid_input
         )
 
-        assert response.status_code == 422
+        assert response.status_code == 400
 
     def test_bounding_box_coordinates_swapped(self, client):
         """Test execution with swapped min/max coordinates."""
@@ -679,7 +694,7 @@ class TestInputValidation:
         )
 
         # Should either be accepted (if no validation) or rejected
-        assert response.status_code in [201, 422]
+        assert response.status_code in [201, 400]
 
 
 class TestContentNegotiation:
