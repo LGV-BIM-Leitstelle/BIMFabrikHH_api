@@ -85,7 +85,7 @@ class TestFlurstueckeModelGeneration:
                 task.get(timeout=10)
 
     def test_flurstuecke_model_empty_umring(self, valid_flurstuecke_request_params):
-        """An empty feature collection succeeds with a message and no model."""
+        """An empty feature collection fails the job with a message for the user."""
         with patch(
             "src.api.ogc_api.services.generate_bim_modells.HamburgOGCAPI.fetch_all_features"
         ) as mock_fetch:
@@ -94,13 +94,11 @@ class TestFlurstueckeModelGeneration:
                 "features": [],
             }
 
-            task = execute_generate_flurstuecke_model.delay(
-                valid_flurstuecke_request_params.model_dump()
-            )
-            result = task.get(timeout=10)
-
-            assert result["model"] is None
-            assert result["message"] == NO_FLURSTUECKE_MESSAGE
+            with pytest.raises(ValueError, match=NO_FLURSTUECKE_MESSAGE):
+                task = execute_generate_flurstuecke_model.delay(
+                    valid_flurstuecke_request_params.model_dump()
+                )
+                task.get(timeout=10)
 
     def test_flurstuecke_model_ifc_write_failure(
         self, valid_flurstuecke_request_params, sample_flurstueck_data
