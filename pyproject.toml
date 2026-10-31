@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bimfabrikhh-api"
-version = "0.2.0"
+version = "0.3.0"
 description = "BIMFabrikHH API - OGC API Processes for automated IFC model generation"
 authors = [
     "Ahmed Salem <ahmed.salem@gv.hamburg.de>",

@@ -11,7 +11,9 @@ BIM-Leitstelle, Ahmed Salem <ahmed.salem@gv.hamburg.de>, Polichronis Muratidis <
 
 import logging
 import os
+import tomllib
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI
@@ -36,6 +38,19 @@ from .ogc_api.utils.ogc_exceptions import register_ogc_exception_handlers
 logger = logging.getLogger(__name__)
 
 
+def _api_version() -> str:
+    """Return the version from ``pyproject.toml``.
+
+    The API runs with ``package-mode = false``, so it is never installed and
+    has no package metadata to read the version from.
+    """
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    try:
+        return tomllib.loads(pyproject.read_text(encoding="utf-8"))["tool"]["poetry"]["version"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError):
+        return "0.0.0+unknown"
+
+
 def create_app() -> FastAPI:
     """
     Create and configure the main FastAPI application.
@@ -57,16 +72,18 @@ def create_app() -> FastAPI:
 
     logger.info(api_settings.config_summary())
 
+    version = _api_version()
+
     # Data API
     data_app = FastAPI(
-        title="BIMFabrikHH API", description=app_data_description, version="0.1.0"
+        title="BIMFabrikHH API", description=app_data_description, version=version
     )
 
     # OGC API Processes
     ogc_app = FastAPI(
         title="BIMFabrikHH OGC API - Processes",
         description=app_ogc_description,
-        version="0.1.0",
+        version=version,
         contact=app_contact,
         license_info=app_license_info,
     )
@@ -114,8 +131,6 @@ def create_app() -> FastAPI:
             logger.error("Error closing rate limiter: %s", e)
 
     # Static files setup for OGC app
-    from pathlib import Path
-
     # Get project root directory (this file is in src/api/)
     project_root = Path(__file__).parent.parent.parent
     output_dir = project_root / api_settings.OUTPUT_FOLDER_PATH
@@ -133,7 +148,7 @@ def create_app() -> FastAPI:
     main_app = FastAPI(
         title="BIMFabrikHH API",
         description="Combined API with Data and OGC services",
-        version="0.1.0",
+        version=version,
         lifespan=lifespan,
     )
 
