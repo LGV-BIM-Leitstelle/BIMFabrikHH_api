@@ -37,7 +37,7 @@ BODY = {
                 "containerTitle": "Projektinformationen",
                 "containerId": "Projektinformationen",
                 "components": {
-                    "project": {"title": "Projektname", "value": "LoD3 Test Innenstadt"},
+                    "project": {"title": "IfcProject", "value": "LoD3 Test Innenstadt"},
                     "site": {"title": "IfcSite", "value": "Hamburg"},
                     "building": {"title": "IfcBuilding", "value": "Innenstadt"},
                 },

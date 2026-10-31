@@ -301,7 +301,7 @@ class TestTreeModelGeneration:
                 "containerId": "Projektinformationen",
                 "containerTitle": "Projektinformationen",
                 "components": {
-                    "projectname": {"title": "Projektname", "value": "Elbbrücke"},
+                    "projectname": {"title": "IfcProject", "value": "Elbbrücke"},
                     "ifc_site": {"title": "IfcSite", "value": "Wilhelmsburg"},
                 },
             }
