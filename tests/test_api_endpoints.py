@@ -159,6 +159,7 @@ class TestProcessesEndpoints:
             "generate-dgm-model",
             "generate-flurstuecke-model",
             "generate-boreholes-model",
+            "generate-basepoint-model",
             "generate-tree-model-rs",
             "generate-city-model-rs",
             "generate-dgm-model-rs",

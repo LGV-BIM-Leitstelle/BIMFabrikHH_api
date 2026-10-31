@@ -105,6 +105,7 @@ LOD_SPECS: Dict[str, Optional[LodSpec]] = {
     ),
     "generate-flurstuecke-model": None,
     "generate-boreholes-model": None,
+    "generate-basepoint-model": None,
 }
 
 
@@ -140,6 +141,14 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "bounding box and exports them as an IFC file. Each soil layer becomes an "
         "IfcBuildingElementProxy cylinder stacked from the Ansatzpunkt, coloured per DIN 4023. "
         "The umring is limited to 0.1 km².",
+    ),
+    ProcessSpec(
+        "generate-basepoint-model",
+        "Generate the Mastermodell (Nullpunktobjekt only) as IFC",
+        "Creates an IFC file with only the Nullpunktobjekt, placed and georeferenced like the "
+        "Nullpunkt of every other process for the same inputs: at basepoint when given, else at "
+        "the lower-left corner of the bounding box. The Teilmodelle can be checked against it. "
+        "The bounding box is optional here; without it basepoint is required.",
     ),
     ProcessSpec(
         "generate-tree-model-rs",

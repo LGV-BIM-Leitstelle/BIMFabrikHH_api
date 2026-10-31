@@ -28,6 +28,7 @@ from src.api.ogc_api.services.admission_controller import get_admission_controll
 from src.api.ogc_api.services.client_identity import get_client_identifier
 from src.api.ogc_api.services.generate_bim_modells import (
     app,
+    execute_generate_basepoint_model,
     execute_generate_boreholes_model,
     execute_generate_city_model,
     execute_generate_city_model_rs,
@@ -65,6 +66,7 @@ PROCESS_TASKS = {
     "generate-dgm-model": execute_generate_dgm_model,
     "generate-flurstuecke-model": execute_generate_flurstuecke_model,
     "generate-boreholes-model": execute_generate_boreholes_model,
+    "generate-basepoint-model": execute_generate_basepoint_model,
     "generate-tree-model-rs": execute_generate_tree_model_rs,
     "generate-city-model-rs": execute_generate_city_model_rs,
     "generate-dgm-model-rs": execute_generate_dgm_model_rs,

@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from BIMFabrikHH_core.apps.basepoint.generic.app import BasepointGenericApp
 from BIMFabrikHH_core.apps.city.generic.app import CityGenericApp
 from BIMFabrikHH_core.apps.city.generic_rust import CityRustApp
 from BIMFabrikHH_core.apps.flurstuecke.generic.app import FlurstueckeGenericApp
@@ -61,6 +62,8 @@ from ..utils.umring_limits import (
     ensure_tile_count,
 )
 from ..utils.user_messages import (
+    BASEPOINT_IFC_FAILED_MESSAGE,
+    BASEPOINT_MISSING_MESSAGE,
     BOREHOLES_IFC_FAILED_MESSAGE,
     CORE_BOREHOLES_MISSING_MESSAGE,
     FLURSTUECKE_IFC_FAILED_MESSAGE,
@@ -724,6 +727,48 @@ def execute_generate_flurstuecke_model(
     except Exception as e:
         logger.exception(
             "Flurstuecke model generation failed (task %s): %s", self.request.id, e
+        )
+        raise to_user_error(e) from e
+
+
+@app.task(bind=True)
+def execute_generate_basepoint_model(
+    self, input_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Generate the Mastermodell: an IFC with only the Nullpunktobjekt.
+
+    The Nullpunkt is placed as in every other process for the same inputs, so
+    the Teilmodelle can be checked against it. Without an umring the basepoint
+    is required, as there is no lower-left corner to fall back to.
+
+    Args:
+        self: Celery task instance.
+        input_data: Dictionary containing request parameters including bounding box.
+
+    Returns:
+        Dict containing model information including download URLs.
+    """
+    try:
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            api_settings.api_default_epsg
+        )
+        if request_params.basepoint_xyz is None and request_params.bbox is None:
+            raise ValueError(BASEPOINT_MISSING_MESSAGE)
+
+        filename = f"Mastermodell_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
+        ifc_path = BasepointGenericApp.build_ifc(
+            request_params=request_params,
+            output_path=OUTPUT_FOLDER / filename,
+        )
+        if ifc_path is None:
+            raise ValueError(BASEPOINT_IFC_FAILED_MESSAGE)
+
+        return ifc_result(filename)
+
+    except Exception as e:
+        logger.exception(
+            "Mastermodell generation failed (task %s): %s", self.request.id, e
         )
         raise to_user_error(e) from e
 
