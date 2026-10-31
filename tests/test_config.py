@@ -59,7 +59,6 @@ def create_mock_celery_task(task_id: str = "test-task-123") -> Mock:
     """
     mock_task = Mock()
     mock_task.request.id = task_id
-    mock_task.update_state = Mock()
     return mock_task
 
 
@@ -174,30 +173,3 @@ def validate_model_result(result: Dict[str, Any]) -> bool:
     required_fields = ["filename", "content_type", "url-http", "url-https"]
 
     return all(field in model for field in required_fields)
-
-
-def validate_progress_updates(
-    mock_task: Mock, expected_percentages: list | None = None
-) -> bool:
-    """
-    Validate that task progress updates were called correctly.
-
-    Args:
-        mock_task: Mock Celery task
-        expected_percentages: List of expected percentage values
-
-    Returns:
-        True if progress updates are valid, False otherwise
-    """
-    if expected_percentages is None:
-        expected_percentages = [0, 25, 50, 75, 100]
-
-    calls = mock_task.update_state.call_args_list
-    progress_calls = [call for call in calls if call[0][0] == "PROGRESS"]
-
-    if len(progress_calls) < len(expected_percentages):
-        return False
-
-    actual_percentages = [call[1]["meta"]["percent"] for call in progress_calls]
-
-    return all(percent in actual_percentages for percent in expected_percentages)

@@ -54,7 +54,6 @@ Comprehensive Celery task tests (pytest):
 - Task configuration and registration
 - Task execution with mocked dependencies
 - Task results and state tracking
-- Progress tracking
 - Input validation
 - Error handling
 

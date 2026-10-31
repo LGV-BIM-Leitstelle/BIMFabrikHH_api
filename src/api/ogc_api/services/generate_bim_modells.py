@@ -273,8 +273,6 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
     Raises:
         Exception: If model generation fails.
     """
-    self.update_state(state="PROGRESS", meta={"percent": 0})
-
     logger.info("Input data for tree model generation: %s", input_data)
     try:
         request_params = ProcessInputs.model_validate(input_data).to_request_params(
@@ -282,11 +280,9 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         )
         ensure_bbox_area(request_params)
 
-        self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
 
         # Fetch raw tree data using API package
-        self.update_state(state="PROGRESS", meta={"percent": 50})
         raw_tree_data = DataFetcher.fetch_tree_data(bbox_dict)
 
         if not raw_tree_data or "features" not in raw_tree_data:
@@ -296,8 +292,6 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         logger.info("Found %s trees in the bounding box", tree_count)
 
         # Process data using core package
-        self.update_state(state="PROGRESS", meta={"percent": 75})
-
         tif_files, folder = tree_dgm_tiles(request_params, bbox_dict)
 
         # Generate output path for API's output folder
@@ -336,8 +330,6 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             basepoint=request_params.basepoint_xyz,
         )
 
-        self.update_state(state="PROGRESS", meta={"percent": 100})
-
         logger.info(
             "Tree model generated successfully: %s (task %s)", filename, self.request.id
         )
@@ -353,17 +345,14 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 @app.task(bind=True)
 def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
     """Same fetch/records as generate-tree-model; IFC via TreesRustApp."""
-    self.update_state(state="PROGRESS", meta={"percent": 0})
     try:
         request_params = ProcessInputs.model_validate(input_data).to_request_params(
             api_settings.api_default_epsg
         )
         ensure_bbox_area(request_params)
 
-        self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
 
-        self.update_state(state="PROGRESS", meta={"percent": 50})
         raw_tree_data = DataFetcher.fetch_tree_data(bbox_dict)
         if not raw_tree_data or "features" not in raw_tree_data:
             raise ValueError(NO_TREE_DATA_MESSAGE)
@@ -389,7 +378,6 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         if not records:
             raise ValueError(NO_TREES_MESSAGE)
 
-        self.update_state(state="PROGRESS", meta={"percent": 75})
         written = TreesRustApp.build_ifc(
             records,
             output_path=output_path,
@@ -405,7 +393,6 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         if written is None:
             raise ValueError(TREES_IFC_FAILED_MESSAGE)
 
-        self.update_state(state="PROGRESS", meta={"percent": 100})
         return ifc_result(filename)
 
     except Exception as e:
@@ -431,8 +418,6 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         ValueError: If too many tiles are requested, or LoD3 is requested.
         Exception: If model generation fails.
     """
-    self.update_state(state="PROGRESS", meta={"percent": 0})
-
     logger.info("Starting city model generation (task %s)", self.request.id)
     try:
         request_params = ProcessInputs.model_validate(input_data).to_request_params(
@@ -440,7 +425,6 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         )
         ensure_bbox_area(request_params)
 
-        self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
 
         # Fetch tile information using API package
@@ -465,8 +449,6 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         local_folder = local_dir_or_raw(lod_folder_url(lod_level))
         logger.info(f"Using LoD{lod_level} directory: {local_folder}")
 
-        self.update_state(state="PROGRESS", meta={"percent": 50})
-
         # Transform file names if needed
         transformed_gml_files = transform_file_names_for_lod(
             gml_files, lod_level, local_folder
@@ -486,9 +468,6 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
         if ifc_path is None:
             raise ValueError(NO_BUILDINGS_MESSAGE)
 
-        self.update_state(state="PROGRESS", meta={"percent": 75})
-        self.update_state(state="PROGRESS", meta={"percent": 100})
-
         logger.info(
             "City model generated successfully: %s (task %s)", filename, self.request.id
         )
@@ -504,14 +483,12 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 @app.task(bind=True)
 def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
     """Same tile fetch as generate-city-model; IFC via CityRustApp (mesh)."""
-    self.update_state(state="PROGRESS", meta={"percent": 0})
     try:
         request_params = ProcessInputs.model_validate(input_data).to_request_params(
             TILE_SOURCE_EPSG, DGM_TILE_VERTICAL_EPSG
         )
         ensure_bbox_area(request_params)
 
-        self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
 
         gml_files = DataFetcher.fetch_citymodel_tiles(bbox_dict)
@@ -524,7 +501,6 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         local_folder = local_dir_or_raw(lod_folder_url(lod_level))
         logger.info(f"Using LoD{lod_level} directory: {local_folder}")
 
-        self.update_state(state="PROGRESS", meta={"percent": 50})
         transformed_gml_files = transform_file_names_for_lod(
             gml_files, lod_level, local_folder
         )
@@ -543,7 +519,6 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         if ifc_path is None:
             raise ValueError(NO_BUILDINGS_MESSAGE)
 
-        self.update_state(state="PROGRESS", meta={"percent": 100})
         return ifc_result(filename)
 
     except Exception as e:
@@ -669,8 +644,6 @@ def execute_generate_flurstuecke_model(
     Raises:
         Exception: If model generation fails.
     """
-    self.update_state(state="PROGRESS", meta={"percent": 0})
-
     logger.info("Starting Flurstuecke model generation (task %s)", self.request.id)
     try:
         request_params = ProcessInputs.model_validate(input_data).to_request_params(
@@ -678,10 +651,8 @@ def execute_generate_flurstuecke_model(
         )
         ensure_bbox_area(request_params)
 
-        self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
 
-        self.update_state(state="PROGRESS", meta={"percent": 50})
         raw_flurstueck_data = HamburgOGCAPI.fetch_all_features(
             str(api_settings.FLURSTUECKE_API_URL),
             {
@@ -703,7 +674,6 @@ def execute_generate_flurstuecke_model(
             raise ValueError(NO_FLURSTUECKE_MESSAGE)
         logger.info("Found %s Flurstuecke in the bounding box", len(records))
 
-        self.update_state(state="PROGRESS", meta={"percent": 75})
         filename = f"Flurstuecke_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.request.id}.ifc"
         output_path = OUTPUT_FOLDER / filename
 
@@ -714,8 +684,6 @@ def execute_generate_flurstuecke_model(
         )
         if ifc_path is None:
             raise ValueError(FLURSTUECKE_IFC_FAILED_MESSAGE)
-
-        self.update_state(state="PROGRESS", meta={"percent": 100})
 
         logger.info(
             "Flurstuecke model generated successfully: %s (task %s)",
@@ -790,8 +758,6 @@ def execute_generate_boreholes_model(
     Raises:
         Exception: If model generation fails.
     """
-    self.update_state(state="PROGRESS", meta={"percent": 0})
-
     logger.info("Starting borehole model generation (task %s)", self.request.id)
     try:
         request_params = ProcessInputs.model_validate(input_data).to_request_params(
@@ -799,10 +765,8 @@ def execute_generate_boreholes_model(
         )
         ensure_borehole_bbox_area(request_params)
 
-        self.update_state(state="PROGRESS", meta={"percent": 25})
         bbox_dict = bbox_to_dict(request_params)
 
-        self.update_state(state="PROGRESS", meta={"percent": 50})
         xml_root = DataFetcher.fetch_borehole_data(bbox_dict)
         if xml_root is None:
             raise ValueError(NO_BOREHOLE_DATA_MESSAGE)
@@ -815,7 +779,6 @@ def execute_generate_boreholes_model(
             raise ValueError(NO_BOREHOLES_MESSAGE)
         logger.info("Found %s boreholes in the bounding box", len(records))
 
-        self.update_state(state="PROGRESS", meta={"percent": 75})
         if BoreholesGenericApp is None:
             raise ImportError(CORE_BOREHOLES_MISSING_MESSAGE)
         filename = (
@@ -831,8 +794,6 @@ def execute_generate_boreholes_model(
         )
         if ifc_path is None:
             raise ValueError(BOREHOLES_IFC_FAILED_MESSAGE)
-
-        self.update_state(state="PROGRESS", meta={"percent": 100})
 
         logger.info(
             "Borehole model generated successfully: %s (task %s)",
