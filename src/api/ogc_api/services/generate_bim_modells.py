@@ -229,11 +229,6 @@ def ifc_result(filename: str) -> Dict[str, Any]:
     }
 
 
-def empty_result(message: str) -> Dict[str, Any]:
-    """Successful job with no IFC — the umring simply had no features."""
-    return {"message": message, "model": None}
-
-
 def dgm_folder() -> str:
     """DGM tile directory, as a path this OS can open."""
     return local_dir_or_raw(
@@ -310,8 +305,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
 
         df = DataProcessor.raw_data_to_dataframe(raw_tree_data)
         if df.empty:
-            logger.info(NO_TREES_MESSAGE)
-            return empty_result(NO_TREES_MESSAGE)
+            raise ValueError(NO_TREES_MESSAGE)
 
         schema = DEFAULT_OAF_SCHEMA
         records = dataframe_to_records(
@@ -323,8 +317,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             log=tree_log_from_containers(request_params.containers),
         )
         if not records:
-            logger.info(NO_TREES_MESSAGE)
-            return empty_result(NO_TREES_MESSAGE)
+            raise ValueError(NO_TREES_MESSAGE)
 
         basepoint_psets = extract_psets_basepoint(request_params.containers or [])
         TreesGenericApp.build_ifc(
@@ -378,8 +371,7 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
 
         df = DataProcessor.raw_data_to_dataframe(raw_tree_data)
         if df.empty:
-            logger.info(NO_TREES_MESSAGE)
-            return empty_result(NO_TREES_MESSAGE)
+            raise ValueError(NO_TREES_MESSAGE)
 
         schema = DEFAULT_OAF_SCHEMA
         records = dataframe_to_records(
@@ -391,8 +383,7 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
             log=tree_log_from_containers(request_params.containers),
         )
         if not records:
-            logger.info(NO_TREES_MESSAGE)
-            return empty_result(NO_TREES_MESSAGE)
+            raise ValueError(NO_TREES_MESSAGE)
 
         self.update_state(state="PROGRESS", meta={"percent": 75})
         written = TreesRustApp.build_ifc(
@@ -487,8 +478,7 @@ def execute_generate_city_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             output_path=output_path,
         )
         if ifc_path is None:
-            logger.info(NO_BUILDINGS_MESSAGE)
-            return empty_result(NO_BUILDINGS_MESSAGE)
+            raise ValueError(NO_BUILDINGS_MESSAGE)
 
         self.update_state(state="PROGRESS", meta={"percent": 75})
         self.update_state(state="PROGRESS", meta={"percent": 100})
@@ -545,8 +535,7 @@ def execute_generate_city_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
             output_path=output_path,
         )
         if ifc_path is None:
-            logger.info(NO_BUILDINGS_MESSAGE)
-            return empty_result(NO_BUILDINGS_MESSAGE)
+            raise ValueError(NO_BUILDINGS_MESSAGE)
 
         self.update_state(state="PROGRESS", meta={"percent": 100})
         return ifc_result(filename)
@@ -581,8 +570,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
         # Fetch tile information using API package
         tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
         if not tif_filenames:
-            logger.info(NO_TERRAIN_MESSAGE)
-            return empty_result(NO_TERRAIN_MESSAGE)
+            raise ValueError(NO_TERRAIN_MESSAGE)
 
         ensure_tile_count(len(tif_filenames))
 
@@ -628,8 +616,7 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
 
         tif_filenames = DataFetcher.fetch_dgm_tiles(bbox_dict)
         if not tif_filenames:
-            logger.info(NO_TERRAIN_MESSAGE)
-            return empty_result(NO_TERRAIN_MESSAGE)
+            raise ValueError(NO_TERRAIN_MESSAGE)
         ensure_tile_count(len(tif_filenames))
 
         filename = (
@@ -707,8 +694,7 @@ def execute_generate_flurstuecke_model(
 
         records = flurstuecke_records_from_geojson(raw_flurstueck_data)
         if not records:
-            logger.info(NO_FLURSTUECKE_MESSAGE)
-            return empty_result(NO_FLURSTUECKE_MESSAGE)
+            raise ValueError(NO_FLURSTUECKE_MESSAGE)
         logger.info("Found %s Flurstuecke in the bounding box", len(records))
 
         self.update_state(state="PROGRESS", meta={"percent": 75})
@@ -778,8 +764,7 @@ def execute_generate_boreholes_model(
         processor = BoreholeMLProcessor()
         records = processor.parse(xml_root)
         if not records:
-            logger.info(NO_BOREHOLES_MESSAGE)
-            return empty_result(NO_BOREHOLES_MESSAGE)
+            raise ValueError(NO_BOREHOLES_MESSAGE)
         logger.info("Found %s boreholes in the bounding box", len(records))
 
         self.update_state(state="PROGRESS", meta={"percent": 75})

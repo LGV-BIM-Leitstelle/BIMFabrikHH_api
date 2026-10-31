@@ -133,13 +133,10 @@ class TestTreeModelGeneration:
             mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
             mock_processor.raw_data_to_dataframe.return_value = Mock(empty=True)
 
-            # An empty umring is a successful job without an IFC, not a failure
-            result = execute_generate_tree_model.delay(
-                valid_request_params.model_dump()
-            ).get()
-
-            assert result["model"] is None
-            assert result["message"] == NO_TREES_MESSAGE
+            with pytest.raises(ValueError, match=NO_TREES_MESSAGE):
+                execute_generate_tree_model.delay(
+                    valid_request_params.model_dump()
+                ).get()
 
     def test_tree_model_area_limit(self, valid_request_params, assert_task_failed):
         """A bbox larger than 1 km² is rejected before tree data is fetched."""

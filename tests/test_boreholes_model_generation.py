@@ -97,13 +97,11 @@ class TestBoreholesModelGeneration:
             mock_fetch.return_value = object()
             mock_processor.return_value.parse.return_value = []
 
-            task = execute_generate_boreholes_model.delay(
-                valid_boreholes_request_params.model_dump()
-            )
-            result = task.get(timeout=10)
-
-            assert result["model"] is None
-            assert result["message"] == NO_BOREHOLES_MESSAGE
+            with pytest.raises(ValueError, match=NO_BOREHOLES_MESSAGE):
+                task = execute_generate_boreholes_model.delay(
+                    valid_boreholes_request_params.model_dump()
+                )
+                task.get(timeout=10)
 
     def test_boreholes_model_ifc_write_failure(self, valid_boreholes_request_params):
         with patch(
