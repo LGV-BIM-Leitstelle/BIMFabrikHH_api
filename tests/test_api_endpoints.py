@@ -383,6 +383,38 @@ class TestProcessExecution:
         assert response.status_code == 201
         assert "test-task-boreholes" in response.headers["Location"]
 
+    @patch("src.api.ogc_api.routes.main_ogc.record_bbox_request")
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_basepoint_model.delay")
+    def test_execute_basepoint_model_without_bbox(
+        self, mock_delay, mock_record, client
+    ):
+        """The master model has no bbox, so no bbox analytics are recorded."""
+        mock_result = Mock()
+        mock_result.id = "test-task-basepoint"
+        mock_delay.return_value = mock_result
+        response = client.post(
+            "/ogc/processes/generate-basepoint-model/execution",
+            json={"inputs": {"basepoint": {"x": 565012.0, "y": 5934000.0}}},
+        )
+        assert response.status_code == 201
+        assert "test-task-basepoint" in response.headers["Location"]
+        mock_record.assert_not_called()
+
+    @patch("src.api.ogc_api.routes.main_ogc.record_bbox_request")
+    @patch("src.api.ogc_api.routes.main_ogc.execute_generate_tree_model.delay")
+    def test_execute_with_bbox_records_analytics(
+        self, mock_delay, mock_record, client, valid_execution_input
+    ):
+        mock_result = Mock()
+        mock_result.id = "test-task-analytics"
+        mock_delay.return_value = mock_result
+        response = client.post(
+            "/ogc/processes/generate-tree-model/execution", json=valid_execution_input
+        )
+        assert response.status_code == 201
+        mock_record.assert_called_once()
+        assert mock_record.call_args.kwargs["bbox"]["min_x"] == 9.9756
+
     def test_execute_nonexistent_process(self, client, valid_execution_input):
         """Test executing non-existent process."""
         response = client.post(
