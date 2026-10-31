@@ -42,7 +42,6 @@ def mock_celery_task():
     """Create a mock Celery task for testing."""
     task = Mock()
     task.request.id = "test-task-123"
-    task.update_state = Mock()
     return task
 
 
@@ -53,7 +52,6 @@ def mock_celery_task_with_id():
     def _create_task(task_id: str = "test-task-123"):
         task = Mock()
         task.request.id = task_id
-        task.update_state = Mock()
         return task
 
     return _create_task
@@ -409,27 +407,6 @@ def validate_model_result():
         required_fields = ["filename", "content_type", "url-http", "url-https"]
 
         return all(field in model for field in required_fields)
-
-    return _validate
-
-
-@pytest.fixture
-def validate_progress_updates():
-    """Validate that task progress updates were called correctly."""
-
-    def _validate(mock_task: Mock, expected_percentages: list | None = None) -> bool:
-        if expected_percentages is None:
-            expected_percentages = [0, 25, 50, 75, 100]
-
-        calls = mock_task.update_state.call_args_list
-        progress_calls = [call for call in calls if call[0][0] == "PROGRESS"]
-
-        if len(progress_calls) < len(expected_percentages):
-            return False
-
-        actual_percentages = [call[1]["meta"]["percent"] for call in progress_calls]
-
-        return all(percent in actual_percentages for percent in expected_percentages)
 
     return _validate
 

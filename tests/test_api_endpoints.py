@@ -159,6 +159,7 @@ class TestProcessesEndpoints:
             "generate-dgm-model",
             "generate-flurstuecke-model",
             "generate-boreholes-model",
+            "generate-basepoint-model",
             "generate-tree-model-rs",
             "generate-city-model-rs",
             "generate-dgm-model-rs",
@@ -181,8 +182,14 @@ class TestProcessesEndpoints:
             "containers",
             "use_dgm_elevation",
             "output_epsg",
+            "basepoint",
         }
         assert self._lod_enum(data) == [1, 2, 3, 4]
+        assert set(
+            data["inputs"]["basepoint"]["schema"]["$defs"]["BasepointParams"][
+                "properties"
+            ]
+        ) == {"x", "y", "z"}
 
     def test_get_process_description_city(self, client):
         """Test getting city model process description."""
@@ -411,12 +418,15 @@ class TestProcessExecution:
             ({"source_epsg": 10285}, "source_epsg"),
             ({"vertical_epsg": 7837}, "vertical_epsg"),
             ({"output_epsg": 4326}, "inputs"),
+            ({"basepoint": {"x": 565012.0}}, "basepoint.y"),
+            ({"output_epsg": 4326, "basepoint": {"x": 10.0, "y": 53.5}}, "inputs"),
         ],
     )
-    def test_execute_rejects_source_codes_and_invalid_output_epsg(
+    def test_execute_rejects_source_codes_and_invalid_crs_inputs(
         self, client, valid_execution_input, extra, failing_input
     ):
-        """source_epsg / vertical_epsg are set by the API; output_epsg must be projected."""
+        """source_epsg / vertical_epsg are set by the API; output_epsg must be projected
+        and the Nullpunkt needs x and y."""
         valid_execution_input["inputs"].update(extra)
 
         response = client.post(

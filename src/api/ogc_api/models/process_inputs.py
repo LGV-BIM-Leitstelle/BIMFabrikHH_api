@@ -10,6 +10,7 @@ task sets them to the CRS it fetches its data in.
 from copy import deepcopy
 from typing import List, Optional
 
+from BIMFabrikHH_core.data_models.params_basepoint import BasepointParams
 from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
 from BIMFabrikHH_core.data_models.params_tree import Container, RequestParams
 from BIMFabrikHH_core.data_models.pydantic_georeferencing import check_projected_epsg
@@ -42,6 +43,7 @@ class ProcessInputs(BaseModel):
     containers: Optional[List[Container]] = deepcopy(_CORE_FIELDS["containers"])
     use_dgm_elevation: bool = deepcopy(_CORE_FIELDS["use_dgm_elevation"])
     output_epsg: Optional[int] = deepcopy(_CORE_FIELDS["output_epsg"])
+    basepoint: Optional[BasepointParams] = deepcopy(_CORE_FIELDS["basepoint"])
 
     @model_validator(mode="after")
     def _check_output_epsg(self) -> "ProcessInputs":

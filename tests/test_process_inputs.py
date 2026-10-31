@@ -39,3 +39,23 @@ def test_to_request_params_sets_the_fetch_crs():
         request_params.vertical_epsg,
     ) == (25832, 10285, 7837)
     assert request_params.bbox_as_wgs84_tuple == tuple(BBOX.values())
+
+
+def test_basepoint_is_checked_in_the_fetch_crs_without_output_epsg():
+    inputs = ProcessInputs(bbox=BBOX, basepoint={"x": 5933559.0, "y": 565012.0})
+    with pytest.raises(ValidationError, match="area of use of EPSG:25832"):
+        inputs.to_request_params(25832)
+
+
+def test_basepoint_is_checked_in_the_output_crs():
+    gk = {"x": 3565126.05, "y": 5935974.38, "z": 7.5}
+    ProcessInputs(bbox=BBOX, output_epsg=10285, basepoint=gk).to_request_params(25832)
+    with pytest.raises(ValidationError, match="area of use of EPSG:25832"):
+        ProcessInputs(bbox=BBOX, basepoint=gk).to_request_params(25832)
+
+
+def test_basepoint_reaches_request_params():
+    request_params = ProcessInputs(
+        bbox=BBOX, basepoint={"x": 565012.0, "y": 5933559.0}
+    ).to_request_params(25832)
+    assert request_params.basepoint_xyz == (565012.0, 5933559.0, 0.0)

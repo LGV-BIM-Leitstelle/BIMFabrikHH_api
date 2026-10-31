@@ -62,6 +62,18 @@ NO_BOREHOLES_MESSAGE = (
     "Im gewählten Umring wurden keine Bohrungen gefunden. "
     "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
 )
+BASEPOINT_MISSING_MESSAGE = (
+    "Für das Mastermodell werden die Koordinaten des Nullpunktobjekts benötigt. "
+    "Bitte Ostwert und Nordwert angeben."
+)
+BASEPOINT_OUTSIDE_CRS_MESSAGE = (
+    "Die Koordinaten des Nullpunktobjekts liegen außerhalb des Koordinatensystems. "
+    "Bitte Ostwert und Nordwert in Metern prüfen."
+)
+BASEPOINT_IFC_FAILED_MESSAGE = (
+    "Das Mastermodell konnte nicht erzeugt werden. "
+    "Bitte versuchen Sie es erneut oder prüfen Sie die Koordinaten des Nullpunktobjekts."
+)
 BOREHOLES_IFC_FAILED_MESSAGE = (
     "Das Bohrungsmodell konnte nicht erzeugt werden. "
     "Bitte versuchen Sie es erneut oder wählen Sie einen anderen Umring."
@@ -129,6 +141,9 @@ _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
         NO_BOREHOLE_DATA_MESSAGE,
         NO_BOREHOLES_MESSAGE,
         BOREHOLES_IFC_FAILED_MESSAGE,
+        BASEPOINT_IFC_FAILED_MESSAGE,
+        BASEPOINT_MISSING_MESSAGE,
+        BASEPOINT_OUTSIDE_CRS_MESSAGE,
         CORE_BOREHOLES_MISSING_MESSAGE,
         INVALID_INPUT_MESSAGE,
         UNEXPECTED_ERROR_MESSAGE,
@@ -158,6 +173,8 @@ def to_user_error(exc: BaseException) -> ValueError:
         return ValueError(CORE_BOREHOLES_MISSING_MESSAGE)
     if "lod3 is only available" in lowered:
         return ValueError(LOD3_ONLY_ON_RS_MESSAGE)
+    if ") lies outside the area of use" in lowered:
+        return ValueError(BASEPOINT_OUTSIDE_CRS_MESSAGE)
     if "validation error" in lowered:
         return ValueError(INVALID_INPUT_MESSAGE)
     return ValueError(UNEXPECTED_ERROR_MESSAGE)

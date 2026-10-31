@@ -34,7 +34,6 @@ def _enable_eager(celery_eager_mode):
 def mock_celery_task():
     """Mock Celery task for testing."""
     mock = Mock()
-    mock.update_state = Mock()
     mock.request.id = "test-task-id"
     return mock
 
