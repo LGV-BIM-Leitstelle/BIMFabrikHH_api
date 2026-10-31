@@ -291,6 +291,44 @@ class TestTreeModelGeneration:
             "Pset_Modellinformation": {"_Projektname": "Elbbrücke"}
         }
 
+    def test_project_info_reaches_the_rust_app(
+        self, valid_request_params, sample_tree_data
+    ):
+        """IfcProject and IfcSite are named as entered in the Projektinformationen."""
+        payload = valid_request_params.model_dump()
+        payload["containers"] = [
+            {
+                "containerId": "Projektinformationen",
+                "containerTitle": "Projektinformationen",
+                "components": {
+                    "projectname": {"title": "Projektname", "value": "Elbbrücke"},
+                    "ifc_site": {"title": "IfcSite", "value": "Wilhelmsburg"},
+                },
+            }
+        ]
+        services = "src.api.ogc_api.services.generate_bim_modells"
+        with patch(f"{services}.DataFetcher") as mock_fetcher_class, patch(
+            f"{services}.DataProcessor"
+        ) as mock_processor, patch(
+            f"{services}.dataframe_to_records", return_value=[{"tree": "record"}]
+        ), patch(
+            f"{services}.tree_crown_detail_from_containers"
+        ), patch(
+            f"{services}.tree_dgm_tiles", return_value=(None, None)
+        ), patch(
+            f"{services}.TreesRustApp"
+        ) as mock_app:
+            mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
+            mock_processor.raw_data_to_dataframe.return_value = Mock(empty=False)
+
+            execute_generate_tree_model_rs.delay(payload).get(timeout=10)
+
+        kwargs = mock_app.build_ifc.call_args.kwargs
+        assert (kwargs["project_name"], kwargs["site_name"]) == (
+            "Elbbrücke",
+            "Wilhelmsburg",
+        )
+
 
 class TestTreeModelIntegration:
     """Integration tests for tree model generation."""
