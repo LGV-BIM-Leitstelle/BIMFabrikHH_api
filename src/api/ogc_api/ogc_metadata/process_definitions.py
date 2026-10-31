@@ -321,6 +321,16 @@ def create_ifc_process_definition(
             "maxOccurs": 1,
             "schema": {"type": "integer"},
         },
+        "basepoint": {
+            "title": "Nullpunktobjekt (x, y, optional z)",
+            "description": properties["basepoint"]["description"],
+            "minOccurs": 0,
+            "maxOccurs": 1,
+            "schema": {
+                "$ref": "#/$defs/BasepointParams",
+                "$defs": {"BasepointParams": defs["BasepointParams"]},
+            },
+        },
     }
 
     return {

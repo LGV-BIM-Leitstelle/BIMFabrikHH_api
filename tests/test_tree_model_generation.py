@@ -115,6 +115,7 @@ class TestTreeModelGeneration:
                 api_settings.api_default_epsg,
                 7837,
             )
+            assert build_kwargs["basepoint"] is None
             assert "model" in result
             assert result["model"]["filename"].startswith("Baeume_")
             assert result["model"]["content_type"] == "application/x-step"
@@ -209,6 +210,86 @@ class TestTreeModelGeneration:
         """Test tree model generation with invalid input data."""
         # Invalid input fails validation and is recorded as a FAILURE state
         assert_task_failed(execute_generate_tree_model, invalid_input)
+
+    @pytest.mark.parametrize(
+        "task, app_name",
+        [
+            (execute_generate_tree_model, "TreesGenericApp"),
+            (execute_generate_tree_model_rs, "TreesRustApp"),
+        ],
+    )
+    def test_entered_basepoint_reaches_the_app(
+        self, valid_request_params, sample_tree_data, task, app_name
+    ):
+        """The trees apps take single kwargs, so the task must pass the Nullpunkt on."""
+        payload = valid_request_params.model_dump()
+        payload["basepoint"] = {"x": 565012.0, "y": 5933559.0}
+        services = "src.api.ogc_api.services.generate_bim_modells"
+        with patch(f"{services}.DataFetcher") as mock_fetcher_class, patch(
+            f"{services}.DataProcessor"
+        ) as mock_processor, patch(
+            f"{services}.dataframe_to_records", return_value=[{"tree": "record"}]
+        ), patch(
+            f"{services}.tree_crown_detail_from_containers"
+        ), patch(
+            f"{services}.extract_psets_basepoint", return_value=[]
+        ), patch(
+            f"{services}.tree_dgm_tiles", return_value=(None, None)
+        ), patch(
+            f"{services}.{app_name}"
+        ) as mock_app:
+            mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
+            mock_processor.raw_data_to_dataframe.return_value = Mock(empty=False)
+
+            task.delay(payload).get(timeout=10)
+
+        assert mock_app.build_ifc.call_args.kwargs["basepoint"] == (
+            565012.0,
+            5933559.0,
+            0.0,
+        )
+
+    @pytest.mark.parametrize(
+        "task, app_name",
+        [
+            (execute_generate_tree_model, "TreesGenericApp"),
+            (execute_generate_tree_model_rs, "TreesRustApp"),
+        ],
+    )
+    def test_form_psets_reach_the_nullpunkt_of_the_app(
+        self, valid_request_params, sample_tree_data, task, app_name
+    ):
+        """Both trees apps get the Nullpunkt psets entered in the form."""
+        payload = valid_request_params.model_dump()
+        payload["containers"] = [
+            {
+                "containerId": "Pset_Modellinformation",
+                "containerTitle": "Pset_Modellinformation",
+                "components": {
+                    "projektname": {"title": "_Projektname", "value": "Elbbrücke"}
+                },
+            }
+        ]
+        services = "src.api.ogc_api.services.generate_bim_modells"
+        with patch(f"{services}.DataFetcher") as mock_fetcher_class, patch(
+            f"{services}.DataProcessor"
+        ) as mock_processor, patch(
+            f"{services}.dataframe_to_records", return_value=[{"tree": "record"}]
+        ), patch(
+            f"{services}.tree_crown_detail_from_containers"
+        ), patch(
+            f"{services}.tree_dgm_tiles", return_value=(None, None)
+        ), patch(
+            f"{services}.{app_name}"
+        ) as mock_app:
+            mock_fetcher_class.fetch_tree_data.return_value = sample_tree_data
+            mock_processor.raw_data_to_dataframe.return_value = Mock(empty=False)
+
+            task.delay(payload).get(timeout=10)
+
+        assert mock_app.build_ifc.call_args.kwargs["basepoint_psets"] == {
+            "Pset_Modellinformation": {"_Projektname": "Elbbrücke"}
+        }
 
 
 class TestTreeModelIntegration:

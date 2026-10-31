@@ -330,6 +330,7 @@ def execute_generate_tree_model(self, input_data: Dict[str, Any]) -> Dict[str, A
             source_epsg=request_params.source_epsg,
             output_epsg=request_params.output_epsg,
             vertical_epsg=DGM_TILE_VERTICAL_EPSG if tif_files is not None else None,
+            basepoint=request_params.basepoint_xyz,
         )
 
         self.update_state(state="PROGRESS", meta={"percent": 100})
@@ -395,6 +396,8 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
             source_epsg=request_params.source_epsg,
             output_epsg=request_params.output_epsg,
             vertical_epsg=DGM_TILE_VERTICAL_EPSG if tif_files is not None else None,
+            basepoint=request_params.basepoint_xyz,
+            basepoint_psets=extract_psets_basepoint(request_params.containers or []),
         )
         if written is None:
             raise ValueError(TREES_IFC_FAILED_MESSAGE)

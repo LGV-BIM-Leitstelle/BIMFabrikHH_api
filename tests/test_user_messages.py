@@ -4,6 +4,7 @@ import pytest
 
 from src.api.ogc_api.utils.user_messages import (
     AREA_LIMIT_MESSAGE,
+    BASEPOINT_OUTSIDE_CRS_MESSAGE,
     BOREHOLES_AREA_LIMIT_MESSAGE,
     INVALID_INPUT_MESSAGE,
     CORE_BOREHOLES_MISSING_MESSAGE,
@@ -31,6 +32,20 @@ from src.api.ogc_api.utils.user_messages import (
         (
             ImportError("bimfabrikhh-core borehole app is required"),
             CORE_BOREHOLES_MISSING_MESSAGE,
+        ),
+        (
+            ValueError(
+                "1 validation error for RequestParams\n  Value error, "
+                "(5933559.0, 565012.0) lies outside the area of use of EPSG:25832"
+            ),
+            BASEPOINT_OUTSIDE_CRS_MESSAGE,
+        ),
+        (
+            ValueError(
+                "1 validation error for RequestParams\n  Value error, "
+                "The bbox lies outside the area of use of EPSG:10285"
+            ),
+            INVALID_INPUT_MESSAGE,
         ),
         (ValueError("1 validation error for RequestParams"), INVALID_INPUT_MESSAGE),
         (Exception("connection reset"), UNEXPECTED_ERROR_MESSAGE),
