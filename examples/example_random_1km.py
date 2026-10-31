@@ -149,7 +149,7 @@ def body_for(
                 "containerTitle": "Projektinformationen",
                 "containerId": "Projektinformationen",
                 "components": {
-                    "project": {"title": "Projektname", "value": f"Random {km:g}km"},
+                    "project": {"title": "IfcProject", "value": f"Random {km:g}km"},
                     "site": {"title": "IfcSite", "value": "Hamburg"},
                     "building": {"title": "IfcBuilding", "value": "Test"},
                 },

@@ -47,7 +47,7 @@ def body_for(dgm_type: int) -> dict:
                     "containerId": "Projektinformationen",
                     "components": {
                         "project": {
-                            "title": "Projektname",
+                            "title": "IfcProject",
                             "value": f"DGM type {dgm_type}",
                         },
                         "site": {"title": "IfcSite", "value": "Hamburg"},

@@ -36,6 +36,7 @@ from BIMFabrikHH_core.core.data_processing import DataProcessor
 from BIMFabrikHH_core.core.georeferencing import DGM_TILE_VERTICAL_EPSG
 from BIMFabrikHH_core.core.ogc_extractor import (
     extract_level_of_geometry,
+    extract_project_info,
     extract_psets_basepoint,
 )
 from BIMFabrikHH_core.data_models.flurstuecke import (
@@ -378,9 +379,12 @@ def execute_generate_tree_model_rs(self, input_data: Dict[str, Any]) -> Dict[str
         if not records:
             raise ValueError(NO_TREES_MESSAGE)
 
+        project_name, site_name, _ = extract_project_info(request_params.containers)
         written = TreesRustApp.build_ifc(
             records,
             output_path=output_path,
+            project_name=project_name,
+            site_name=site_name,
             bbox_wgs84=request_params.bbox_as_wgs84_tuple,
             tif_files=tif_files,
             dgm_folder=folder,
