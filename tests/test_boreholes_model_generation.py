@@ -67,6 +67,12 @@ class TestBoreholesModelGeneration:
             mock_app.build_ifc.assert_called_once()
 
             assert mock_app.build_ifc.call_args.args[0] == records
+            # The WFS delivers EPSG:5555: UTM 32N positions and DHHN92 heights.
+            request_params = mock_app.build_ifc.call_args.kwargs["request_params"]
+            assert (request_params.source_epsg, request_params.vertical_epsg) == (
+                25832,
+                5783,
+            )
             assert result["model"]["filename"].startswith("Baugrundaufschluesse_")
             assert result["model"]["content_type"] == "application/x-step"
 

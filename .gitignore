@@ -35,6 +35,7 @@ poetry.lock
 # Database files
 *.sqlite
 *.db
+database/
 
 # Log files
 *.log

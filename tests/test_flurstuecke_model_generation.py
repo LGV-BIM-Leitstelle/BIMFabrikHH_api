@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
+from src.api.config.settings import api_settings
 from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_flurstuecke_model,
 )
@@ -62,6 +63,11 @@ class TestFlurstueckeModelGeneration:
 
             assert result["model"]["filename"].startswith("Flurstuecke_")
             assert result["model"]["content_type"] == "application/x-step"
+
+            # The API declares the CRS it fetched the parcels in.
+            request_params = mock_app.build_ifc.call_args.kwargs["request_params"]
+            assert request_params.source_epsg == api_settings.api_default_epsg
+            assert request_params.vertical_epsg is None
 
     def test_flurstuecke_model_without_features_key(
         self, valid_flurstuecke_request_params

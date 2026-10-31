@@ -23,7 +23,7 @@ Comprehensive tests for FastAPI HTTP endpoints:
 - Job status and results endpoints
 - CORS header validation
 - API documentation endpoints
-- Error handling (404, 405, 422)
+- Error handling (400, 404, 405)
 - Input validation
 - Content negotiation
 - End-to-end workflow tests

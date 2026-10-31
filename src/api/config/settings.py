@@ -166,6 +166,11 @@ class APISettings(BaseSettings):
     LOG_FILE_BACKUP_COUNT: int = 14
 
     @property
+    def api_default_epsg(self) -> int:
+        """EPSG code of ``API_DEFAULT_CRS`` (``.../EPSG/0/25832`` → ``25832``)."""
+        return int(self.API_DEFAULT_CRS.rstrip("/").rsplit("/", 1)[-1])
+
+    @property
     def redis_url(self) -> str:
         """Return the Redis connection URL used for admission control.
 
