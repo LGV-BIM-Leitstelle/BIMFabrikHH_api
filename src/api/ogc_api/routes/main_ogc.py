@@ -278,18 +278,20 @@ def execute_process(
 
     # Record identity-decoupled bounding-box analytics off the request path.
     # Only the requested extent is stored (no client id, no job id), so the
-    # data cannot be tied to an identifiable person (DSGVO/GDPR).
-    background_tasks.add_task(
-        record_bbox_request,
-        model_type=processID,
-        bbox={
-            "min_x": inputs.bbox.min_x,
-            "min_y": inputs.bbox.min_y,
-            "max_x": inputs.bbox.max_x,
-            "max_y": inputs.bbox.max_y,
-        },
-        use_dgm_elevation=getattr(inputs, "use_dgm_elevation", None),
-    )
+    # data cannot be tied to an identifiable person (DSGVO/GDPR). Processes
+    # without an extent (e.g. the master model) have no bbox and are skipped.
+    if inputs.bbox is not None:
+        background_tasks.add_task(
+            record_bbox_request,
+            model_type=processID,
+            bbox={
+                "min_x": inputs.bbox.min_x,
+                "min_y": inputs.bbox.min_y,
+                "max_x": inputs.bbox.max_x,
+                "max_y": inputs.bbox.max_y,
+            },
+            use_dgm_elevation=getattr(inputs, "use_dgm_elevation", None),
+        )
 
     # Get base URL from settings
     base_url = str(api_settings.BASE_URL).rstrip("/")

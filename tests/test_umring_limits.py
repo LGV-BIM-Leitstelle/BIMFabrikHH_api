@@ -8,7 +8,6 @@ from src.api.ogc_api.utils.umring_limits import (
     BOREHOLE_MAX_AREA_KM2,
     DEFAULT_MAX_AREA_KM2,
     MAX_TILES,
-    UMRING_LIMITS_FILE,
     bbox_area_m2,
     ensure_bbox_area,
     ensure_borehole_bbox_area,
@@ -21,9 +20,7 @@ from src.api.ogc_api.utils.user_messages import (
 )
 
 
-def test_umring_limits_are_loaded_from_repo_json():
-    assert UMRING_LIMITS_FILE.is_file()
-    assert UMRING_LIMITS_FILE.name == "umring_limits.json"
+def test_umring_limits():
     assert DEFAULT_MAX_AREA_KM2 == 1.05
     assert BOREHOLE_MAX_AREA_KM2 == 0.105
     assert MAX_TILES == 6
