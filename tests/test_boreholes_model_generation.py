@@ -13,6 +13,7 @@ import pytest
 
 from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_boreholes_model,
+    execute_generate_boreholes_model_rs,
 )
 from src.api.ogc_api.utils.user_messages import (
     BOREHOLES_AREA_LIMIT_MESSAGE,
@@ -75,6 +76,28 @@ class TestBoreholesModelGeneration:
             )
             assert result["model"]["filename"].startswith("Baugrundaufschluesse_")
             assert result["model"]["content_type"] == "application/x-step"
+
+    def test_successful_boreholes_model_rs_generation(
+        self, valid_boreholes_request_params
+    ):
+        records = _sample_records()
+        services = "src.api.ogc_api.services.generate_bim_modells"
+        with patch(f"{services}.DataFetcher.fetch_borehole_data") as mock_fetch, patch(
+            f"{services}.BoreholeMLProcessor"
+        ) as mock_processor, patch(f"{services}.BoreholesRustApp") as mock_app:
+            mock_fetch.return_value = object()
+            mock_processor.return_value.parse.return_value = records
+            mock_app.build_ifc.return_value = "/path/to/boreholes.ifc"
+
+            result = execute_generate_boreholes_model_rs.delay(
+                valid_boreholes_request_params.model_dump()
+            ).get(timeout=10)
+
+            kwargs = mock_app.build_ifc.call_args.kwargs
+            assert mock_app.build_ifc.call_args.args[0] == records
+            assert (kwargs["source_epsg"], kwargs["vertical_epsg"]) == (25832, 5783)
+            assert kwargs["basepoint"] is None
+            assert result["model"]["filename"].startswith("Baugrundaufschluesse_rs_")
 
     def test_boreholes_model_without_xml(self, valid_boreholes_request_params):
         with patch(

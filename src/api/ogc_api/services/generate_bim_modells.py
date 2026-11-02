@@ -89,6 +89,11 @@ except ImportError:  # core feat/boreholes is not on main yet
     BoreholesGenericApp = None
     BoreholeMLProcessor = None
 
+try:
+    from BIMFabrikHH_core.apps.boreholes import BoreholesRustApp
+except ImportError:  # BoreholesRustApp arrives with core feat/boreholes-rust
+    BoreholesRustApp = None
+
 # Output folder for generated IFC files
 OUTPUT_FOLDER = Path(api_settings.OUTPUT_FOLDER_PATH)
 
@@ -809,5 +814,65 @@ def execute_generate_boreholes_model(
     except Exception as e:
         logger.exception(
             "Borehole model generation failed (task %s): %s", self.request.id, e
+        )
+        raise to_user_error(e) from e
+
+
+@app.task(bind=True)
+def execute_generate_boreholes_model_rs(
+    self, input_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Same BoreholeML fetch as generate-boreholes-model; IFC via BoreholesRustApp."""
+    logger.info("Starting borehole model generation (rs) (task %s)", self.request.id)
+    try:
+        request_params = ProcessInputs.model_validate(input_data).to_request_params(
+            BOREHOLE_SOURCE_EPSG, BOREHOLE_VERTICAL_EPSG
+        )
+        ensure_borehole_bbox_area(request_params)
+
+        bbox_dict = bbox_to_dict(request_params)
+
+        xml_root = DataFetcher.fetch_borehole_data(bbox_dict)
+        if xml_root is None:
+            raise ValueError(NO_BOREHOLE_DATA_MESSAGE)
+        if BoreholeMLProcessor is None or BoreholesRustApp is None:
+            raise ImportError(CORE_BOREHOLES_MISSING_MESSAGE)
+
+        records = BoreholeMLProcessor().parse(xml_root)
+        if not records:
+            raise ValueError(NO_BOREHOLES_MESSAGE)
+        logger.info("Found %s boreholes in the bounding box", len(records))
+
+        filename = (
+            f"Baugrundaufschluesse_rs_{datetime.now().strftime('%Y%m%d_%H%M%S')}_"
+            f"{self.request.id}.ifc"
+        )
+        output_path = OUTPUT_FOLDER / filename
+        project_name, site_name, _ = extract_project_info(request_params.containers)
+        ifc_path = BoreholesRustApp.build_ifc(
+            records,
+            output_path=output_path,
+            project_name=project_name,
+            site_name=site_name,
+            bbox_wgs84=request_params.bbox_as_wgs84_tuple,
+            source_epsg=request_params.source_epsg,
+            output_epsg=request_params.output_epsg,
+            vertical_epsg=request_params.vertical_epsg,
+            basepoint=request_params.basepoint_xyz,
+            basepoint_psets=extract_psets_basepoint(request_params.containers or []),
+        )
+        if ifc_path is None:
+            raise ValueError(BOREHOLES_IFC_FAILED_MESSAGE)
+
+        logger.info(
+            "Borehole model (rs) generated successfully: %s (task %s)",
+            filename,
+            self.request.id,
+        )
+        return ifc_result(filename)
+
+    except Exception as e:
+        logger.exception(
+            "Borehole model generation (rs) failed (task %s): %s", self.request.id, e
         )
         raise to_user_error(e) from e

@@ -4,7 +4,7 @@ Draws ``--count`` random ``--km`` × ``--km`` boxes (same sampling as
 ``bimfabrikhh_core_rs/examples/example_random_2km.py``). Each box is sent
 to both the generic and the ``-rs`` process so times and IFC sizes are
 comparable — except for Flurstuecke, which only has a generic node. Default
-is all kinds (8 jobs per umring).
+is all kinds (9 jobs per umring).
 
     python examples/example_random_1km.py --seed 1
     python examples/example_random_1km.py --km 2 --count 5 --kind tree
@@ -40,7 +40,7 @@ KIND_NODES = {
     "tree": ("generate-tree-model", "generate-tree-model-rs"),
     # Flurstuecke exist as a generic node only, so this kind runs one job.
     "flurstueck": ("generate-flurstuecke-model",),
-    "borehole": ("generate-boreholes-model",),
+    "borehole": ("generate-boreholes-model", "generate-boreholes-model-rs"),
 }
 
 _TO_UTM = Transformer.from_crs("EPSG:4326", "EPSG:25832", always_xy=True)

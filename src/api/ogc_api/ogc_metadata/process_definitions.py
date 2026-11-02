@@ -105,6 +105,7 @@ LOD_SPECS: Dict[str, Optional[LodSpec]] = {
     ),
     "generate-flurstuecke-model": None,
     "generate-boreholes-model": None,
+    "generate-boreholes-model-rs": None,
     "generate-basepoint-model": None,
 }
 
@@ -141,6 +142,13 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "bounding box and exports them as an IFC file. Each soil layer becomes an "
         "IfcBuildingElementProxy cylinder stacked from the Ansatzpunkt, coloured per DIN 4023. "
         "The umring is limited to 0.1 km².",
+    ),
+    ProcessSpec(
+        "generate-boreholes-model-rs",
+        "Generate BIM borehole models as IFC (Rust)",
+        "Creates BIM models of Hamburg Baugrundaufschlüsse (BoreholeML 3.0 WFS) within a given "
+        "bounding box and exports them as an IFC file via BoreholesRustApp. The solids of one "
+        "borehole become one IfcElementAssembly. The umring is limited to 0.1 km².",
     ),
     ProcessSpec(
         "generate-basepoint-model",
