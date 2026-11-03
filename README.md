@@ -221,6 +221,7 @@ Generates IFC models of Hamburg Baugrundaufschlüsse from the BoreholeML 3.0 WFS
 - BIM.Hamburg psets (`Pset_Aufschluss`, `Pset_Aufschlussbereich`, `Pset_Schicht`)
 - Fetch stays in the API; core only parses BoreholeML and writes IFC
 - Umring limited to 0.1 km² (other processes stay at 1 km²)
+- `generate-boreholes-model-rs` writes the same data via BoreholesRustApp: one `IfcElementAssembly` per borehole
 - Filter preview uses the Header WFS (`GET /data/bimfabrikhh-datasets/wfs-boreholes`)
 
 **Example Request:**
@@ -235,6 +236,12 @@ POST /ogc/processes/generate-boreholes-model/execution
     "max_y": 53.5536
   }
 }
+```
+
+The Rust process takes the same body:
+
+```bash
+POST /ogc/processes/generate-boreholes-model-rs/execution
 ```
 
 ## Deployment

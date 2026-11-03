@@ -38,6 +38,7 @@ PROCESSES = (
     "generate-dgm-model-rs",
     "generate-flurstuecke-model",
     "generate-boreholes-model",
+    "generate-boreholes-model-rs",
 )
 PROJECTED_CRS = re.compile(r"IFCPROJECTEDCRS\('([^']*)'")
 POINT_3D = re.compile(r"IFCCARTESIANPOINT\(\(([-\d.E]+),([-\d.E]+),([-\d.E]+)\)\)")
