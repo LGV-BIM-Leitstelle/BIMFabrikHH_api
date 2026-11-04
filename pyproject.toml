@@ -43,6 +43,7 @@ pytest = "^8.4.1"
 pytest-cov = "^6.0.0"
 ipykernel = "*"
 locust = "*"
+pre-commit = "^4.7.0"
 
 [build-system]
 requires = ["poetry-core"]
