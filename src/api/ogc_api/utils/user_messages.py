@@ -46,14 +46,6 @@ NO_BIOTOPES_MESSAGE = (
     "Im gewählten Umring wurden keine Biotope gefunden. "
     "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
 )
-NO_BOREHOLE_DATA_MESSAGE = (
-    "Es konnten keine Bohrungsdaten für den gewählten Umring geladen werden. "
-    "Bitte wählen Sie einen anderen Bereich."
-)
-NO_BOREHOLES_MESSAGE = (
-    "Im gewählten Umring wurden keine Bohrungen gefunden. "
-    "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
-)
 LOD3_ONLY_ON_RS_MESSAGE = (
     "LoD3 steht in diesem Prozess nicht zur Verfügung. "
     "Bitte wählen Sie LoD1 oder LoD2, oder starten Sie die Erzeugung über das Rust-Stadtmodell."
@@ -73,6 +65,14 @@ FLURSTUECKE_IFC_FAILED_MESSAGE = (
 BIOTOPES_IFC_FAILED_MESSAGE = (
     "Das Biotopmodell konnte nicht erzeugt werden. "
     "Bitte versuchen Sie es erneut oder wählen Sie einen anderen Umring."
+)
+NO_BOREHOLE_DATA_MESSAGE = (
+    "Es konnten keine Bohrungsdaten für den gewählten Umring geladen werden. "
+    "Bitte wählen Sie einen anderen Bereich."
+)
+NO_BOREHOLES_MESSAGE = (
+    "Im gewählten Umring wurden keine Bohrungen gefunden. "
+    "Bitte zeichnen Sie einen größeren Umring oder wählen Sie einen anderen Bereich."
 )
 BASEPOINT_MISSING_MESSAGE = (
     "Für das Mastermodell werden die Koordinaten des Nullpunktobjekts benötigt. "
@@ -132,7 +132,7 @@ def too_many_jobs_message(limit: int) -> str:
 
 
 def process_not_found_message(process_id: str) -> str:
-    return f"Der Prozess „{process_id}“ wurde nicht gefunden."
+    return f'Der Prozess „{process_id}“ wurde nicht gefunden.'
 
 
 _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
@@ -146,10 +146,13 @@ _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
         NO_TERRAIN_MESSAGE,
         NO_FLURSTUECK_DATA_MESSAGE,
         NO_FLURSTUECKE_MESSAGE,
+        NO_BIOTOPES_DATA_MESSAGE,
+        NO_BIOTOPES_MESSAGE,
         LOD3_ONLY_ON_RS_MESSAGE,
         TREES_IFC_FAILED_MESSAGE,
         TERRAIN_IFC_FAILED_MESSAGE,
         FLURSTUECKE_IFC_FAILED_MESSAGE,
+        BIOTOPES_IFC_FAILED_MESSAGE,
         NO_BOREHOLE_DATA_MESSAGE,
         NO_BOREHOLES_MESSAGE,
         BOREHOLES_IFC_FAILED_MESSAGE,
