@@ -3,9 +3,8 @@ Integration tests for external Hamburg OGC API URLs configured in .env.
 
 These tests call the live Hamburg APIs via DataFetcher and the Data API
 endpoints. They verify that TREES_API_URL, TREES_HAFEN_API_URL,
-DGM_TILES_API_URL, WFS_BOREHOLE_API_URL, BIOTOPKATASTER_API_URL and 
-FLURSTUECKE_API_URL are reachable and return valid
-responses.
+DGM_TILES_API_URL, WFS_BOREHOLE_API_URL, FLURSTUECKE_API_URL and the six
+BIOTOPE_*_API_URL are reachable and return valid responses.
 
 Requires network access and a configured .env file.
 
@@ -70,6 +69,20 @@ BOREHOLE_NAMESPACES = {
 
 DGM_TILE_PATTERN = re.compile(r"^dgm1_32_\d+_\d+_1_hh_2022\.tif$")
 
+_AREAS = {"Polygon", "MultiPolygon"}
+_LINES = {"MultiLineString"}
+_POINTS = {"Point"}
+
+# Setting, collection name and geometry types of the six Biotopkataster collections.
+BIOTOPE_COLLECTIONS = [
+    ("BIOTOPE_AREAS_PROTECTED_API_URL", "flaechenhafte_biotope_geschuetzt", _AREAS),
+    ("BIOTOPE_AREAS_UNPROTECTED_API_URL", "flaechenhafte_biotope_nicht_geschuetzt", _AREAS),
+    ("BIOTOPE_LINES_PROTECTED_API_URL", "linienhafte_biotope_geschuetzt", _LINES),
+    ("BIOTOPE_LINES_UNPROTECTED_API_URL", "linenhafte_biotope_nicht_geschuetzt", _LINES),
+    ("BIOTOPE_POINTS_PROTECTED_API_URL", "punkthafte_biotope_geschuetzt", _POINTS),
+    ("BIOTOPE_POINTS_UNPROTECTED_API_URL", "punkthafte_biotope_nicht_geschuetzt", _POINTS),
+]
+
 
 def _assert_oaf_feature_collection(data: Dict[str, Any]) -> None:
     assert isinstance(data, dict)
@@ -98,7 +111,7 @@ def live_client() -> TestClient:
 
 
 class TestEnvApiUrlConfiguration:
-    """Verify the four external API URLs are loaded from .env."""
+    """Verify the external API URLs are loaded from .env."""
 
     def test_trees_api_url_configured(self) -> None:
         url = str(api_settings.TREES_API_URL)
@@ -124,11 +137,11 @@ class TestEnvApiUrlConfiguration:
         assert "alkis_vereinfacht" in url
         assert url.endswith("/items")
 
-    def test_biotope_api_url_configured(self) -> None:
-        url = str(api_settings.BIOTOPKATASTER_API_URL)
+    @pytest.mark.parametrize(("setting", "collection", "_geometry_types"), BIOTOPE_COLLECTIONS)
+    def test_biotope_api_url_configured(self, setting: str, collection: str, _geometry_types: set) -> None:
+        url = str(getattr(api_settings, setting))
         assert url.startswith("https://")
-        assert "flaechenhafte_biotope_nicht_geschuetzt" in url
-        assert url.endswith("/items")
+        assert url.endswith(f"/biotopkataster/collections/{collection}/items")
 
     def test_wfs_borehole_api_url_configured(self) -> None:
         url = str(api_settings.WFS_BOREHOLE_API_URL)
@@ -185,7 +198,7 @@ class TestDgmTilesApiUrl:
         assert all(DGM_TILE_PATTERN.match(tile) for tile in tiles)
 
 
-def _flurstueck_items_params(bbox: Dict[str, float]) -> Dict[str, Any]:
+def _oaf_items_params(bbox: Dict[str, float]) -> Dict[str, Any]:
     return {
         "f": "json",
         "bbox": f"{bbox['min_x']},{bbox['min_y']},{bbox['max_x']},{bbox['max_y']}",
@@ -201,7 +214,7 @@ class TestFlurstueckeApiUrl:
     def test_fetch_flurstueck_data_returns_polygon_features(self) -> None:
         data = HamburgOGCAPI.fetch_all_features(
             str(api_settings.FLURSTUECKE_API_URL),
-            _flurstueck_items_params(HAMBURG_TREE_BBOX),
+            _oaf_items_params(HAMBURG_TREE_BBOX),
         )
         _assert_oaf_feature_collection(data)
         assert len(data["features"]) > 0
@@ -217,35 +230,27 @@ class TestFlurstueckeApiUrl:
         """Paging collects every match, not just the first page."""
         data = HamburgOGCAPI.fetch_all_features(
             str(api_settings.FLURSTUECKE_API_URL),
-            _flurstueck_items_params(HAMBURG_TREE_BBOX),
+            _oaf_items_params(HAMBURG_TREE_BBOX),
         )
         assert len(data["features"]) == data["numberMatched"]
 
 
-class TestBiotopesApiUrl:
-    """Live tests for BIOTOPKATASTER_API_URL."""
+class TestBiotopesApiUrls:
+    """Live tests for the six BIOTOPE_*_API_URL collections."""
 
-    def test_fetch_biotope_data_returns_polygon_features(self) -> None:
+    @pytest.mark.parametrize(("setting", "_collection", "geometry_types"), BIOTOPE_COLLECTIONS)
+    def test_fetch_biotope_data(self, setting: str, _collection: str, geometry_types: set) -> None:
+        """Every match is collected, with the collection's geometry type and the record's required fields."""
         data = HamburgOGCAPI.fetch_all_features(
-            str(api_settings.BIOTOPKATASTER_API_URL),
-            _flurstueck_items_params(HAMBURG_TREE_BBOX),
+            str(getattr(api_settings, setting)),
+            _oaf_items_params(HAMBURG_TREE_BBOX),
         )
         _assert_oaf_feature_collection(data)
-        assert len(data["features"]) > 0
-
-        feature = data["features"][0]
-        assert feature["geometry"]["type"] in {"Polygon", "MultiPolygon"}
-        # Attributes the Flurstueck psets are built from.
-        properties = feature.get("properties", {})
-        assert "objectid" in properties
-
-    def test_fetch_biotope_data_is_not_truncated(self) -> None:
-        """Paging collects every match, not just the first page."""
-        data = HamburgOGCAPI.fetch_all_features(
-            str(api_settings.BIOTOPKATASTER_API_URL),
-            _flurstueck_items_params(HAMBURG_TREE_BBOX),
-        )
         assert len(data["features"]) == data["numberMatched"]
+        for feature in data["features"]:
+            assert feature["geometry"]["type"] in geometry_types
+            # Required fields of BiotopeRecord.
+            assert {"objectid", "id_biotop", "dk5", "biotop_nr"} <= feature["properties"].keys()
 
 
 class TestBoreholeApiUrl:

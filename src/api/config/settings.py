@@ -84,7 +84,7 @@ class APISettings(BaseSettings):
     # ALKIS Flurstueck API (flurstuecke app)
     FLURSTUECKE_API_URL: HttpUrl
 
-    # ALKIS Biotopkataster APIs (biotopkataster app)
+    # Biotopkataster APIs (biotopes app), one collection per shape and protection status
     BIOTOPE_AREAS_UNPROTECTED_API_URL: HttpUrl
     BIOTOPE_AREAS_PROTECTED_API_URL: HttpUrl
     BIOTOPE_LINES_UNPROTECTED_API_URL: HttpUrl
