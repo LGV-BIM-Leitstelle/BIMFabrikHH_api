@@ -30,7 +30,6 @@ from src.api.ogc_api.services.generate_bim_modells import (
     app,
     execute_generate_basepoint_model,
     execute_generate_biotopes_model,
-    execute_generate_flurstuecke_model,
     execute_generate_boreholes_model,
     execute_generate_boreholes_model_rs,
     execute_generate_city_model,

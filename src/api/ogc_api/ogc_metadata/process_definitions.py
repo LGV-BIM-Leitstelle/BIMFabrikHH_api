@@ -140,7 +140,8 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "generate-biotopes-model",
         "Generate BIM biotopes models as IFC",
         "Creates BIM models of Biotopkataster biotopes within a given bounding box and exports them as an "
-        "IFC file. Each parcel footprint becomes an IfcBuildingElementProxy extruded 30 m from z=0.",
+        "IFC file. Each biotope section becomes an IfcBuildingElementProxy extruded 30 m from z=0: areas as "
+        "polygons, lines with their recorded width and points as 5 m boxes.",
     ),
     ProcessSpec(
         "generate-boreholes-model",
