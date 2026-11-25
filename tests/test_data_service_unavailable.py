@@ -140,3 +140,17 @@ def test_data_endpoint_answers_503_when_the_service_is_down():
         )
     assert response.status_code == 503
     assert response.json()["detail"] == DATA_SERVICE_UNAVAILABLE_MESSAGE
+
+
+def test_biotope_endpoint_answers_503_when_the_service_is_down():
+    client = TestClient(create_app())
+    with patch(
+        "src.api.data_api.oaf_endpoints.HamburgOGCAPI.fetch_data",
+        side_effect=requests.ConnectionError("connection refused"),
+    ):
+        response = client.get(
+            "/data/bimfabrikhh-datasets/oaf-biotopes",
+            params={"min_x": 9.9861, "min_y": 53.4867, "max_x": 9.9872, "max_y": 53.4872},
+        )
+    assert response.status_code == 503
+    assert response.json()["detail"] == DATA_SERVICE_UNAVAILABLE_MESSAGE

@@ -222,10 +222,7 @@ def get_oaf_biotopes(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
             }
         )
     except Exception as e:
-        LOGGER.error("An error occurred: %s" % e)
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching biotope data: {str(e)}"
-        )
+        raise _fetch_error(e, "biotope data")
 
 
 @router.get(
