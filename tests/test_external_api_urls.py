@@ -25,7 +25,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api.config import api_settings
-from src.api.ogc_api.services.http_requests import DataFetcher, HamburgOGCAPI, WFSAPI
+from src.api.ogc_api.services.http_requests import DataFetcher, HamburgOGCAPI
 from src.api.web_app import create_app
 
 pytestmark = [
@@ -121,6 +121,12 @@ class TestEnvApiUrlConfiguration:
         url = str(api_settings.FLURSTUECKE_API_URL)
         assert url.startswith("https://")
         assert "alkis_vereinfacht" in url
+        assert url.endswith("/items")
+
+    def test_alkis_nutzung_api_url_configured(self) -> None:
+        url = str(api_settings.ALKIS_NUTZUNG_API_URL)
+        assert url.startswith("https://")
+        assert "alkis_vereinfacht/collections/Nutzung" in url
         assert url.endswith("/items")
 
     def test_wfs_borehole_api_url_configured(self) -> None:
