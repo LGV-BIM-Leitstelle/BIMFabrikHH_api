@@ -13,7 +13,6 @@ Copyright (C) 2025 Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation un
 
 import os
 import sqlite3
-from datetime import datetime
 from unittest.mock import patch
 
 import pytest

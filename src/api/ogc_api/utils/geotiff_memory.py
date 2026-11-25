@@ -10,7 +10,6 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import requests
-import rasterio
 from rasterio.io import MemoryFile
 
 logger = logging.getLogger(__name__)
