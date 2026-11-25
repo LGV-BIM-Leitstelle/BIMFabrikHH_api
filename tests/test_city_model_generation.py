@@ -9,7 +9,6 @@ worker or broker. Heavy core dependencies are mocked.
 from unittest.mock import Mock, patch
 
 import pytest
-from fastapi import HTTPException
 
 from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_city_model,

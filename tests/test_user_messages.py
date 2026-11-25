@@ -1,12 +1,14 @@
 """Internal errors are mapped to the UI message constants."""
 
 import pytest
+import requests
 
 from src.api.ogc_api.utils.user_messages import (
     AREA_LIMIT_MESSAGE,
     BASEPOINT_OUTSIDE_CRS_MESSAGE,
     BIOTOPES_IFC_FAILED_MESSAGE,
     BOREHOLES_AREA_LIMIT_MESSAGE,
+    DATA_SERVICE_UNAVAILABLE_MESSAGE,
     INVALID_INPUT_MESSAGE,
     CORE_BOREHOLES_MISSING_MESSAGE,
     NO_BIOTOPES_DATA_MESSAGE,
@@ -19,6 +21,12 @@ from src.api.ogc_api.utils.user_messages import (
     UNEXPECTED_ERROR_MESSAGE,
     to_user_error,
 )
+
+
+def _http_error(status: int) -> requests.HTTPError:
+    response = requests.Response()
+    response.status_code = status
+    return requests.HTTPError(f"{status} Server Error", response=response)
 
 
 @pytest.mark.parametrize(
@@ -55,6 +63,10 @@ from src.api.ogc_api.utils.user_messages import (
         ),
         (ValueError("1 validation error for RequestParams"), INVALID_INPUT_MESSAGE),
         (Exception("connection reset"), UNEXPECTED_ERROR_MESSAGE),
+        (requests.ConnectionError("connection refused"), DATA_SERVICE_UNAVAILABLE_MESSAGE),
+        (requests.Timeout("read timed out"), DATA_SERVICE_UNAVAILABLE_MESSAGE),
+        (_http_error(503), DATA_SERVICE_UNAVAILABLE_MESSAGE),
+        (_http_error(404), UNEXPECTED_ERROR_MESSAGE),
     ],
 )
 def test_to_user_error_maps_to_ui_message(incoming, expected):

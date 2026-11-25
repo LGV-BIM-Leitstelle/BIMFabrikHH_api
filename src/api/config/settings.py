@@ -92,12 +92,15 @@ class APISettings(BaseSettings):
     BIOTOPE_POINTS_UNPROTECTED_API_URL: HttpUrl
     BIOTOPE_POINTS_PROTECTED_API_URL: HttpUrl
 
+    # ALKIS Nutzung API (Bruchkanten of the DGM with ALKIS, level_of_geom=2)
+    ALKIS_NUTZUNG_API_URL: HttpUrl
+
     # WFS BOREHOLE API (borehole app)
     WFS_BOREHOLE_API_URL: HttpUrl
     WFS_BOREHOLE_HEADER_API_URL: HttpUrl
 
     # API Settings
-    API_TIMEOUT: int
+    API_TIMEOUT: int  # read timeout per request, retried once
     API_DEFAULT_LIMIT: int
     API_DEFAULT_CRS: str
 
@@ -222,6 +225,7 @@ class APISettings(BaseSettings):
             f"  DGM tiles API:       {self.DGM_TILES_API_URL}",
             f"  Flurstuecke API:     {self.FLURSTUECKE_API_URL}",
             f"  Biotopkataster APIs:  {self.BIOTOPE_AREAS_PROTECTED_API_URL}, {self.BIOTOPE_AREAS_UNPROTECTED_API_URL}, {self.BIOTOPE_LINES_PROTECTED_API_URL}, {self.BIOTOPE_LINES_UNPROTECTED_API_URL}, {self.BIOTOPE_POINTS_PROTECTED_API_URL}, {self.BIOTOPE_POINTS_UNPROTECTED_API_URL}",
+            f"  ALKIS Nutzung API:   {self.ALKIS_NUTZUNG_API_URL}",
             f"  WFS Borehole API:    {self.WFS_BOREHOLE_API_URL}",
             f"  WFS Borehole Header: {self.WFS_BOREHOLE_HEADER_API_URL}",
             f"  API timeout:         {self.API_TIMEOUT}s",

@@ -9,13 +9,14 @@ worker or broker. Heavy core dependencies are mocked.
 from unittest.mock import Mock, patch
 
 import pytest
-from fastapi import HTTPException
+import requests
 
 from src.api.ogc_api.services.generate_bim_modells import (
     execute_generate_dgm_model,
     execute_generate_dgm_model_rs,
 )
 from src.api.ogc_api.utils.user_messages import (
+    DATA_SERVICE_UNAVAILABLE_MESSAGE,
     TILE_LIMIT_MESSAGE,
     UNEXPECTED_ERROR_MESSAGE,
 )
@@ -63,6 +64,24 @@ def sample_dgm_tiles():
 
 
 @pytest.fixture
+def nutzung_collection():
+    """ALKIS Nutzung page: one street (a Bruchkante) and one building (skipped)."""
+    ring = [[565100.0, 5932100.0], [565120.0, 5932100.0], [565120.0, 5932110.0], [565100.0, 5932100.0]]
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": nutzart,
+                "geometry": {"type": "Polygon", "coordinates": [ring]},
+                "properties": {"nutzart": nutzart},
+            }
+            for nutzart in ("Strassenverkehr", "Gebaeude")
+        ],
+    }
+
+
+@pytest.fixture
 def sample_ifc_content():
     """Sample IFC content for testing."""
     return b"ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('IFC file'),'2;1');\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;"
@@ -93,7 +112,8 @@ class TestDGMModelGeneration:
 
             # Verify result structure
             mock_app.from_geotiffs.assert_called_once()
-            assert mock_app.from_geotiffs.call_args.kwargs.get("guide_from_oaf") is False
+            assert mock_app.from_geotiffs.call_args.kwargs["guide_records"] is None
+            mock_fetcher_class.fetch_alkis_nutzung.assert_not_called()
             request_params = mock_app.from_geotiffs.call_args.kwargs["request_params"]
             assert (request_params.source_epsg, request_params.vertical_epsg) == (25832, 7837)
             assert "model" in result
@@ -101,7 +121,7 @@ class TestDGMModelGeneration:
             assert result["model"]["content_type"] == "application/x-step"
 
     def test_dgm_type_parcels_from_workflow_container(
-        self, valid_dgm_request_params, sample_dgm_tiles
+        self, valid_dgm_request_params, sample_dgm_tiles, nutzung_collection
     ):
         """Portal DetailSelector uses the same level_of_geometry container as Stadtmodell."""
         payload = valid_dgm_request_params.model_dump()
@@ -120,12 +140,15 @@ class TestDGMModelGeneration:
             "src.api.ogc_api.services.generate_bim_modells.TerrainGenericApp"
         ) as mock_app:
             mock_fetcher_class.fetch_dgm_tiles.return_value = sample_dgm_tiles
+            mock_fetcher_class.fetch_alkis_nutzung.return_value = nutzung_collection
             mock_app.from_geotiffs.return_value = "/path/to/dgm_model.ifc"
             execute_generate_dgm_model.delay(payload).get(timeout=10)
-            assert mock_app.from_geotiffs.call_args.kwargs["guide_from_oaf"] is True
+            guide_records = mock_app.from_geotiffs.call_args.kwargs["guide_records"]
+            assert [r.nutzart for r in guide_records] == ["Strassenverkehr"]
+            assert "guide_from_oaf" not in mock_app.from_geotiffs.call_args.kwargs
 
     def test_dgm_rs_type_parcels_from_workflow_container(
-        self, valid_dgm_request_params, sample_dgm_tiles
+        self, valid_dgm_request_params, sample_dgm_tiles, nutzung_collection
     ):
         payload = valid_dgm_request_params.model_dump()
         payload["containers"] = list(payload.get("containers") or []) + [
@@ -143,9 +166,11 @@ class TestDGMModelGeneration:
             "src.api.ogc_api.services.generate_bim_modells.TerrainRustApp"
         ) as mock_app:
             mock_fetcher_class.fetch_dgm_tiles.return_value = sample_dgm_tiles
+            mock_fetcher_class.fetch_alkis_nutzung.return_value = nutzung_collection
             mock_app.from_geotiffs.return_value = "/path/to/dgm_model.ifc"
             execute_generate_dgm_model_rs.delay(payload).get(timeout=10)
-            assert mock_app.from_geotiffs.call_args.kwargs["guide_from_oaf"] is True
+            guide_records = mock_app.from_geotiffs.call_args.kwargs["guide_records"]
+            assert [r.nutzart for r in guide_records] == ["Strassenverkehr"]
 
     @pytest.mark.parametrize(
         "too_many_tiles",
@@ -187,6 +212,29 @@ class TestDGMModelGeneration:
                     valid_dgm_request_params.model_dump()
                 )
                 task.get(timeout=10)
+
+    def test_dgm_alkis_unavailable_gives_the_data_service_message(
+        self, valid_dgm_request_params, sample_dgm_tiles
+    ):
+        payload = valid_dgm_request_params.model_dump()
+        payload["containers"] = list(payload.get("containers") or []) + [
+            {
+                "containerId": "level_of_geometry",
+                "containerTitle": "Level Of Geometry",
+                "components": {
+                    "level_of_geom": {"title": "Level Of Geometry", "value": 2},
+                },
+            }
+        ]
+        with patch(
+            "src.api.ogc_api.services.generate_bim_modells.DataFetcher"
+        ) as mock_fetcher_class:
+            mock_fetcher_class.fetch_dgm_tiles.return_value = sample_dgm_tiles
+            mock_fetcher_class.fetch_alkis_nutzung.side_effect = requests.ConnectionError(
+                "connection refused"
+            )
+            with pytest.raises(ValueError, match=DATA_SERVICE_UNAVAILABLE_MESSAGE):
+                execute_generate_dgm_model_rs.delay(payload).get(timeout=10)
 
 
 class TestDGMModelIntegration:

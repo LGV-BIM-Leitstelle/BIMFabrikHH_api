@@ -20,12 +20,24 @@ from lxml import etree
 
 from ..config.settings import api_settings
 from ..ogc_api.services.http_requests import DataFetcher, HamburgOGCAPI
+from ..ogc_api.utils.user_messages import (
+    DATA_SERVICE_UNAVAILABLE_MESSAGE,
+    is_data_service_unavailable,
+)
 
 router = APIRouter()
 
 BMLH_NS = "http://www.infogeo.de/boreholeml/3.0/header"
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _fetch_error(exc: Exception, what: str) -> HTTPException:
+    """503 with the UI message when the Hamburg service is down, else 500."""
+    LOGGER.error("An error occurred: %s" % exc)
+    if is_data_service_unavailable(exc):
+        return HTTPException(status_code=503, detail=DATA_SERVICE_UNAVAILABLE_MESSAGE)
+    return HTTPException(status_code=500, detail=f"Error fetching {what}: {str(exc)}")
 
 
 @router.get(
@@ -61,10 +73,7 @@ def get_oaf_trees(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
 
         return JSONResponse(content=trees_data)
     except Exception as e:
-        LOGGER.error("An error occurred: %s" % e)
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching tree data: {str(e)}"
-        )
+        raise _fetch_error(e, "tree data")
 
 
 @router.get(
@@ -100,10 +109,7 @@ def get_oaf_trees_hafen(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
 
         return JSONResponse(content=trees_data)
     except Exception as e:
-        LOGGER.error("An error occurred: %s" % e)
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching harbor tree data: {str(e)}"
-        )
+        raise _fetch_error(e, "harbor tree data")
 
 
 @router.get(
@@ -159,10 +165,7 @@ def get_oaf_flurstuecke(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
             }
         )
     except Exception as e:
-        LOGGER.error("An error occurred: %s" % e)
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching Flurstueck data: {str(e)}"
-        )
+        raise _fetch_error(e, "Flurstueck data")
 
 
 @router.get(
@@ -269,10 +272,7 @@ def get_wfs_boreholes(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
             }
         )
     except Exception as e:
-        LOGGER.error("An error occurred: %s" % e)
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching borehole data: {str(e)}"
-        )
+        raise _fetch_error(e, "borehole data")
 
 
 def _borehole_header_preview(
@@ -328,10 +328,7 @@ def get_oaf_citymodell(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
 
         return JSONResponse(content=citymodel_tiles)
     except Exception as e:
-        LOGGER.error("An error occurred: %s" % e)
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching citymodel tiles: {str(e)}"
-        )
+        raise _fetch_error(e, "citymodel tiles")
 
 
 @router.get(
@@ -367,7 +364,4 @@ def get_oaf_dgm(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
 
         return JSONResponse(content=dgm_tiles)
     except Exception as e:
-        LOGGER.error("An error occurred: %s" % e)
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching DGM tiles: {str(e)}"
-        )
+        raise _fetch_error(e, "DGM tiles")

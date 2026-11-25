@@ -2,6 +2,8 @@
 
 from typing import FrozenSet
 
+import requests
+
 TILE_LIMIT_MESSAGE = (
     "Die Anzahl der Kacheln überschreitet die Grenze von 6 Kacheln. "
     "Bitte zeichnen Sie einen kleineren Umring."
@@ -99,6 +101,10 @@ INVALID_INPUT_MESSAGE = (
     "Die Eingabedaten sind ungültig. "
     "Bitte prüfen Sie den Umring und die übrigen Angaben."
 )
+DATA_SERVICE_UNAVAILABLE_MESSAGE = (
+    "Die Datendienste der Stadt Hamburg sind gerade nicht erreichbar. "
+    "Bitte versuchen Sie es in einigen Minuten erneut."
+)
 UNEXPECTED_ERROR_MESSAGE = (
     "Die Erzeugung ist unerwartet fehlgeschlagen. "
     "Bitte versuchen Sie es erneut. Wenn der Fehler bestehen bleibt, "
@@ -161,10 +167,19 @@ _KNOWN_USER_MESSAGES: FrozenSet[str] = frozenset(
         BASEPOINT_OUTSIDE_CRS_MESSAGE,
         CORE_BOREHOLES_MISSING_MESSAGE,
         INVALID_INPUT_MESSAGE,
+        DATA_SERVICE_UNAVAILABLE_MESSAGE,
         UNEXPECTED_ERROR_MESSAGE,
         JOB_TIMEOUT_MESSAGE,
     }
 )
+
+
+def is_data_service_unavailable(exc: BaseException) -> bool:
+    """True when a Hamburg data service could not be reached or answered 5xx."""
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    response = getattr(exc, "response", None)
+    return isinstance(exc, requests.HTTPError) and response is not None and response.status_code >= 500
 
 
 def to_user_error(exc: BaseException) -> ValueError:
@@ -172,6 +187,8 @@ def to_user_error(exc: BaseException) -> ValueError:
     text = str(exc).strip()
     if text in _KNOWN_USER_MESSAGES:
         return exc if isinstance(exc, ValueError) else ValueError(text)
+    if is_data_service_unavailable(exc):
+        return ValueError(DATA_SERVICE_UNAVAILABLE_MESSAGE)
 
     lowered = text.lower()
     if "no buildings parsed" in lowered:

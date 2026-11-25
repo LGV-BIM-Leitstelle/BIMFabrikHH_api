@@ -47,6 +47,11 @@ from BIMFabrikHH_core.data_models.biotopes import (
     records_from_geojson_feature_collection as biotopes_records_from_geojson,
 )
 from BIMFabrikHH_core.data_models.params_tree import RequestParams
+from BIMFabrikHH_core.data_models.streets import (
+    GUIDE_NUTZARTEN,
+    StreetRecord,
+    records_from_geojson_feature_collection as streets_records_from_geojson,
+)
 from celery import Celery
 from celery.signals import setup_logging as celery_setup_logging
 from celery.signals import task_failure, task_postrun, task_revoked
@@ -250,6 +255,16 @@ def dgm_folder() -> str:
     return local_dir_or_raw(
         f"{api_settings.DATA_BASE_URL}/{api_settings.DATA_DGM_FOLDER}"
     )
+
+
+def dgm_guide_records(
+    lod_level: int, bbox_dict: Dict[str, float]
+) -> Optional[List[StreetRecord]]:
+    """ALKIS Nutzung outlines as DGM Bruchkanten for ``level_of_geom=2``, else ``None``."""
+    if lod_level != 2:
+        return None
+    data = DataFetcher.fetch_alkis_nutzung(bbox_dict)
+    return streets_records_from_geojson(data, nutzarten=GUIDE_NUTZARTEN)
 
 
 def tree_dgm_tiles(
@@ -585,7 +600,7 @@ def execute_generate_dgm_model(self, input_data: Dict[str, Any]) -> Dict[str, An
             request_params=request_params,
             folder_path=dgm_folder(),
             output_path=output_path,
-            guide_from_oaf=lod_level == 2,
+            guide_records=dgm_guide_records(lod_level, bbox_dict),
         )
         if ifc_path is None:
             raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)
@@ -629,7 +644,7 @@ def execute_generate_dgm_model_rs(self, input_data: Dict[str, Any]) -> Dict[str,
             request_params=request_params,
             folder_path=dgm_folder(),
             output_path=output_path,
-            guide_from_oaf=lod_level == 2,
+            guide_records=dgm_guide_records(lod_level, bbox_dict),
         )
         if ifc_path is None:
             raise ValueError(TERRAIN_IFC_FAILED_MESSAGE)
