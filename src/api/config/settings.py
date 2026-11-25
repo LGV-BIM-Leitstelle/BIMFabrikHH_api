@@ -89,7 +89,7 @@ class APISettings(BaseSettings):
     WFS_BOREHOLE_HEADER_API_URL: HttpUrl
 
     # API Settings
-    API_TIMEOUT: int
+    API_TIMEOUT: int  # read timeout per request, retried once
     API_DEFAULT_LIMIT: int
     API_DEFAULT_CRS: str
 

@@ -12,18 +12,39 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from lxml import etree
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from BIMFabrikHH_core.core.utils import MathTool
 
 from ...config.settings import api_settings
 
 LOGGER = logging.getLogger(__name__)
 
+# The Hamburg services drop out for a few seconds at a time: they answer
+# 502-504, refuse the connection, or accept it and send nothing. A read timeout
+# is retried once, so a hanging service still ends after about 2 x API_TIMEOUT.
+CONNECT_TIMEOUT = 5
+RETRY = Retry(
+    total=3,
+    connect=3,
+    read=1,
+    status=3,
+    backoff_factor=1,
+    status_forcelist=(502, 503, 504),
+    allowed_methods=frozenset({"GET"}),
+    respect_retry_after_header=False,
+    raise_on_status=False,
+)
+SESSION = requests.Session()
+SESSION.mount("https://", HTTPAdapter(max_retries=RETRY))
+SESSION.mount("http://", HTTPAdapter(max_retries=RETRY))
+
 
 class HamburgOGCAPI:
     """Handles HTTP requests to Hamburg OGC APIs."""
 
     # API settings from configuration
-    TIMEOUT = api_settings.API_TIMEOUT
+    TIMEOUT = (CONNECT_TIMEOUT, api_settings.API_TIMEOUT)
     DEFAULT_LIMIT = api_settings.API_DEFAULT_LIMIT
     DEFAULT_CRS = api_settings.API_DEFAULT_CRS
 
@@ -47,7 +68,7 @@ class HamburgOGCAPI:
         """
         try:
             LOGGER.info(f"Fetching data from: {url}")
-            response = requests.get(url, params=params, timeout=HamburgOGCAPI.TIMEOUT)
+            response = SESSION.get(url, params=params, timeout=HamburgOGCAPI.TIMEOUT)
             response.raise_for_status()
 
             data = response.json()
@@ -239,7 +260,7 @@ class WFSAPI:
     """Handles HTTP requests to WFS APIs."""
 
     # API settings from configuration
-    TIMEOUT = api_settings.API_TIMEOUT
+    TIMEOUT = (CONNECT_TIMEOUT, api_settings.API_TIMEOUT)
 
     @staticmethod
     def fetch_data(url: str, params: Dict[str, Any]) -> etree._Element:
@@ -260,7 +281,7 @@ class WFSAPI:
         LOGGER.info("Fetching data from: %s", url)
 
         try:
-            response = requests.get(url, params=params, timeout=WFSAPI.TIMEOUT)
+            response = SESSION.get(url, params=params, timeout=WFSAPI.TIMEOUT)
             response.raise_for_status()
             data = etree.fromstring(response.content)
 
@@ -321,6 +342,28 @@ class DataFetcher:
 
         url = str(api_settings.TREES_HAFEN_API_URL)
         return HamburgOGCAPI.fetch_data(url, params)
+
+    @staticmethod
+    def fetch_alkis_nutzung(bbox: Dict[str, float]) -> Dict[str, Any]:
+        """
+        Fetch ALKIS Nutzung from OAF API, all pages, in ``DEFAULT_CRS``.
+
+        Args:
+            bbox: Bounding box parameters
+
+        Returns:
+            Raw Nutzung feature collection from API
+        """
+        params = {
+            "f": "json",
+            "bbox": f"{bbox['min_x']},{bbox['min_y']},{bbox['max_x']},{bbox['max_y']}",
+            "crs": HamburgOGCAPI.DEFAULT_CRS,
+            "limit": HamburgOGCAPI.DEFAULT_LIMIT,
+            "skipGeometry": "false",
+        }
+
+        url = str(api_settings.ALKIS_NUTZUNG_API_URL)
+        return HamburgOGCAPI.fetch_all_features(url, params)
 
     @staticmethod
     def fetch_citymodel_tiles(bbox: Dict[str, float]) -> List[str]:
