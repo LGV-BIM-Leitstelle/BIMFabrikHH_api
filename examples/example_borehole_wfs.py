@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 
-from typing import Any, Dict
-from lxml import etree
+from typing import Dict
 from time import perf_counter
 
-from src.api.ogc_api.services.http_requests import DataFetcher, HamburgOGCAPI
-from src.api.config import api_settings
+from src.api.ogc_api.services.http_requests import DataFetcher
 
 
 # Small bounding box with 4 boreholes.
