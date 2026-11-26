@@ -46,12 +46,12 @@ from BIMFabrikHH_core.data_models.flurstuecke import (
 from BIMFabrikHH_core.data_models.biotopes import (
     records_from_geojson_feature_collection as biotopes_records_from_geojson,
 )
-from BIMFabrikHH_core.data_models.params_tree import RequestParams
-from BIMFabrikHH_core.data_models.streets import (
+from BIMFabrikHH_core.data_models.nutzung import (
     GUIDE_NUTZARTEN,
-    StreetRecord,
-    records_from_geojson_feature_collection as streets_records_from_geojson,
+    NutzungRecord,
+    records_from_geojson_feature_collection as nutzung_records_from_geojson,
 )
+from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from celery import Celery
 from celery.signals import setup_logging as celery_setup_logging
 from celery.signals import task_failure, task_postrun, task_revoked
@@ -259,12 +259,12 @@ def dgm_folder() -> str:
 
 def dgm_guide_records(
     lod_level: int, bbox_dict: Dict[str, float]
-) -> Optional[List[StreetRecord]]:
+) -> Optional[List[NutzungRecord]]:
     """ALKIS Nutzung outlines as DGM Bruchkanten for ``level_of_geom=2``, else ``None``."""
     if lod_level != 2:
         return None
     data = DataFetcher.fetch_alkis_nutzung(bbox_dict)
-    return streets_records_from_geojson(data, nutzarten=GUIDE_NUTZARTEN)
+    return nutzung_records_from_geojson(data, nutzarten=GUIDE_NUTZARTEN)
 
 
 def tree_dgm_tiles(
