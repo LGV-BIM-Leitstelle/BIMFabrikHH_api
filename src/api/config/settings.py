@@ -84,6 +84,14 @@ class APISettings(BaseSettings):
     # ALKIS Flurstueck API (flurstuecke app)
     FLURSTUECKE_API_URL: HttpUrl
 
+    # Biotopkataster APIs (biotopes app), one collection per shape and protection status
+    BIOTOPE_AREAS_UNPROTECTED_API_URL: HttpUrl
+    BIOTOPE_AREAS_PROTECTED_API_URL: HttpUrl
+    BIOTOPE_LINES_UNPROTECTED_API_URL: HttpUrl
+    BIOTOPE_LINES_PROTECTED_API_URL: HttpUrl
+    BIOTOPE_POINTS_UNPROTECTED_API_URL: HttpUrl
+    BIOTOPE_POINTS_PROTECTED_API_URL: HttpUrl
+
     # ALKIS Nutzung API (Bruchkanten of the DGM with ALKIS, level_of_geom=2)
     ALKIS_NUTZUNG_API_URL: HttpUrl
 
@@ -216,9 +224,10 @@ class APISettings(BaseSettings):
             f"  Trees Hafen API:     {self.TREES_HAFEN_API_URL}",
             f"  DGM tiles API:       {self.DGM_TILES_API_URL}",
             f"  Flurstuecke API:     {self.FLURSTUECKE_API_URL}",
+            f"  Biotopkataster APIs:  {self.BIOTOPE_AREAS_PROTECTED_API_URL}, {self.BIOTOPE_AREAS_UNPROTECTED_API_URL}, {self.BIOTOPE_LINES_PROTECTED_API_URL}, {self.BIOTOPE_LINES_UNPROTECTED_API_URL}, {self.BIOTOPE_POINTS_PROTECTED_API_URL}, {self.BIOTOPE_POINTS_UNPROTECTED_API_URL}",
             f"  ALKIS Nutzung API:   {self.ALKIS_NUTZUNG_API_URL}",
-            f"  WFS Borehole API:       {self.WFS_BOREHOLE_API_URL}",
-            f"  WFS Borehole Header:    {self.WFS_BOREHOLE_HEADER_API_URL}",
+            f"  WFS Borehole API:    {self.WFS_BOREHOLE_API_URL}",
+            f"  WFS Borehole Header: {self.WFS_BOREHOLE_HEADER_API_URL}",
             f"  API timeout:         {self.API_TIMEOUT}s",
             f"  API default limit:   {self.API_DEFAULT_LIMIT}",
             f"  API default CRS:     {self.API_DEFAULT_CRS}",

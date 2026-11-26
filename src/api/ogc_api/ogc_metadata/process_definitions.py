@@ -104,6 +104,7 @@ LOD_SPECS: Dict[str, Optional[LodSpec]] = {
         summary="Terrain (DGM) generation mode.",
     ),
     "generate-flurstuecke-model": None,
+    "generate-biotopes-model": None,
     "generate-boreholes-model": None,
     "generate-boreholes-model-rs": None,
     "generate-basepoint-model": None,
@@ -134,6 +135,13 @@ PROCESS_SPECS: Tuple[ProcessSpec, ...] = (
         "Creates BIM models of ALKIS Flurstücke within a given bounding box and exports them as an "
         "IFC file. Each parcel footprint becomes an IfcBuildingElementProxy extruded 30 m from z=0, "
         "coloured per Gemarkung.",
+    ),
+    ProcessSpec(
+        "generate-biotopes-model",
+        "Generate BIM biotopes models as IFC",
+        "Creates BIM models of Biotopkataster biotopes within a given bounding box and exports them as an "
+        "IFC file. Each biotope section becomes an IfcBuildingElementProxy extruded 30 m from z=0: areas as "
+        "polygons, lines with their recorded width and points as 5 m boxes.",
     ),
     ProcessSpec(
         "generate-boreholes-model",
