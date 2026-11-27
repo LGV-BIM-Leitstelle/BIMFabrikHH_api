@@ -44,10 +44,10 @@ HAMBURG_TREE_BBOX: Dict[str, float] = {
 
 # Harbor area bbox (HafenCity / Landungsbrücken vicinity).
 HAMBURG_HAFEN_BBOX: Dict[str, float] = {
-    "min_x": 9.9650,
-    "min_y": 53.5380,
-    "max_x": 9.9950,
-    "max_y": 53.5480,
+    "min_x": 9.9610,
+    "min_y": 53.5370,
+    "max_x": 9.9730,
+    "max_y": 53.5430,
 }
 
 # Small bounding box with 4 boreholes.

@@ -13,6 +13,7 @@ import logging
 from typing import List
 
 from BIMFabrikHH_core.data_models.params_bbox import BoundingBoxParams
+from BIMFabrikHH_core.data_models.params_tree import RequestParams
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
 
@@ -20,6 +21,7 @@ from lxml import etree
 
 from ..config.settings import api_settings
 from ..ogc_api.services.http_requests import DataFetcher, HamburgOGCAPI
+from ..ogc_api.utils.umring_limits import ensure_bbox_area, ensure_borehole_bbox_area
 from ..ogc_api.utils.user_messages import (
     DATA_SERVICE_UNAVAILABLE_MESSAGE,
     is_data_service_unavailable,
@@ -40,13 +42,30 @@ def _fetch_error(exc: Exception, what: str) -> HTTPException:
     return HTTPException(status_code=500, detail=f"Error fetching {what}: {str(exc)}")
 
 
+def _checked_bbox(bbox: BoundingBoxParams, ensure_area) -> BoundingBoxParams:
+    """400 before any request to Hamburg when the umring exceeds the area cap."""
+    try:
+        ensure_area(RequestParams(bbox=bbox))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return bbox
+
+
+def _umring_bbox(bbox: BoundingBoxParams = Depends()) -> BoundingBoxParams:
+    return _checked_bbox(bbox, ensure_bbox_area)
+
+
+def _borehole_umring_bbox(bbox: BoundingBoxParams = Depends()) -> BoundingBoxParams:
+    return _checked_bbox(bbox, ensure_borehole_bbox_area)
+
+
 @router.get(
     "/bimfabrikhh-datasets/oaf-trees",
     response_class=Response,
     tags=["Strassenbaumkataster Hamburg"],
     description="Get trees from OGC API Features Hamburg",
 )
-def get_oaf_trees(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+def get_oaf_trees(bbox: BoundingBoxParams = Depends(_umring_bbox)) -> JSONResponse:
     """
     Retrieve tree data from Hamburg's OGC API Features service.
 
@@ -82,7 +101,7 @@ def get_oaf_trees(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
     tags=["Strassenbaumkataster Hamburg Hafen"],
     description="Get harbor trees from OGC API Features Hamburg",
 )
-def get_oaf_trees_hafen(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+def get_oaf_trees_hafen(bbox: BoundingBoxParams = Depends(_umring_bbox)) -> JSONResponse:
     """
     Retrieve harbor tree data from Hamburg's OGC API Features service.
 
@@ -118,7 +137,7 @@ def get_oaf_trees_hafen(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
     tags=["ALKIS Flurstuecke Hamburg"],
     description="Get ALKIS Flurstuecke from OGC API Features Hamburg",
 )
-def get_oaf_flurstuecke(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+def get_oaf_flurstuecke(bbox: BoundingBoxParams = Depends(_umring_bbox)) -> JSONResponse:
     """
     Count ALKIS Flurstuecke in the umring, plus the Gemarkungen on the first page.
 
@@ -174,7 +193,7 @@ def get_oaf_flurstuecke(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
     tags=["Biotopkataster Hamburg"],
     description="Get Biotopes from OGC API Features Hamburg",
 )
-def get_oaf_biotopes(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+def get_oaf_biotopes(bbox: BoundingBoxParams = Depends(_umring_bbox)) -> JSONResponse:
     """
     Count biotopes in the umring.
 
@@ -231,7 +250,7 @@ def get_oaf_biotopes(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
     tags=["Baugrundaufschlüsse Hamburg"],
     description="Count Hamburg Baugrundaufschlüsse from the BoreholeML 3.0 Header WFS",
 )
-def get_wfs_boreholes(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+def get_wfs_boreholes(bbox: BoundingBoxParams = Depends(_borehole_umring_bbox)) -> JSONResponse:
     """
     Count boreholes in the umring for the BIMFabrik workflow preview.
 
@@ -298,7 +317,7 @@ def _borehole_header_preview(
     tags=["Stadtmodell Hamburg"],
     description="Get Tiles-Citymodell from OGC API Features Hamburg",
 )
-def get_oaf_citymodell(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+def get_oaf_citymodell(bbox: BoundingBoxParams = Depends(_umring_bbox)) -> JSONResponse:
     """
     Retrieve city model tile information from Hamburg's OGC API Features service.
 
@@ -334,7 +353,7 @@ def get_oaf_citymodell(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
     tags=["Digitales Höhenmodell Hamburg DGM 1"],
     description="Get Tiles-DGM from OGC API Features Hamburg",
 )
-def get_oaf_dgm(bbox: BoundingBoxParams = Depends()) -> JSONResponse:
+def get_oaf_dgm(bbox: BoundingBoxParams = Depends(_umring_bbox)) -> JSONResponse:
     """
     Retrieve DGM (Digital Terrain Model) tile information from Hamburg's OGC API Features service.
 
